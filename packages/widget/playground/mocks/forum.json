@@ -1,0 +1,55 @@
+{
+  "render": true,
+  "template": "forum_post",
+  "tokens": {
+    "colorBackground": "transparent",
+    "colorSurface": "#ffffff",
+    "colorText": "#333333",
+    "colorTextSecondary": "#999999",
+    "colorPrice": "#E40712",
+    "colorCtaBg": "#FFED00",
+    "colorCtaText": "#10357F",
+    "colorBorder": "#dddddd",
+    "colorAccent": "#10357F",
+    "colorAccentSecondary": "#0097D6",
+    "colorBadgeBg": "#e8f5fc",
+    "colorBadgeText": "#0b6ea0",
+    "fontFamily": "\"Segoe UI\", system-ui, -apple-system, Arial, sans-serif",
+    "fontSizeBase": "14px",
+    "radius": "3px",
+    "shadow": "0 1px 2px rgba(0,0,0,.04)",
+    "ctaPulse": true
+  },
+  "meta": {
+    "advertiserName": "Harald Nyborg",
+    "sponsoredLabel": "Sponsoreret",
+    "timestampLabel": "I dag",
+    "catalogTitle": "Tilbudsavis · uge 34",
+    "heroText": "Ugens store værktøjsudsalg — bor, maskiner og haveudstyr",
+    "ctaLabel": "Se tilbudsavisen →",
+    "contextStripLabel": "Relevant for denne tråd",
+    "copy": "Skal der bores i beton? Ugens avis er landet — 56 sider med værktøj, bor, plugs og alt til gør-det-selv-projektet. Bladr den igennem, inden du kører forbi.",
+    "contextProducts": [
+      { "id": "mock-slagbor", "title": "Slagboremaskine 750W", "clickUrl": "#slagbor", "price": "349,-", "subtitle": "Uge 34-avisen s. 2" },
+      { "id": "mock-betonbor", "title": "Betonbor-sæt Ø5–10", "clickUrl": "#betonbor", "price": "89,-", "subtitle": "Uge 34-avisen s. 2" },
+      { "id": "mock-rawlplugs", "title": "Rawlplugs 100 stk.", "clickUrl": "#rawlplugs", "price": "29,-", "subtitle": "Uge 34-avisen s. 3" }
+    ]
+  },
+  "products": [
+    { "id": "mock-p1", "title": "Slagboremaskine 750W", "clickUrl": "#p1", "price": "599,-", "salePrice": "349,-", "badge": "-40%" },
+    { "id": "mock-p2", "title": "Betonbor-sæt 5 dele", "clickUrl": "#p2", "price": "149,-", "salePrice": "89,-" },
+    { "id": "mock-p3", "title": "Rawlplugs 100 stk.", "clickUrl": "#p3", "price": "29,-" },
+    { "id": "mock-p4", "title": "Loftskroge 10 stk.", "clickUrl": "#p4", "price": "39,-" },
+    { "id": "mock-p5", "title": "Trådløs skruemaskine 18V", "clickUrl": "#p5", "price": "799,-", "salePrice": "499,-" },
+    { "id": "mock-p6", "title": "Bitssæt 32 dele", "clickUrl": "#p6", "price": "129,-", "salePrice": "69,-" },
+    { "id": "mock-p7", "title": "Arbejdslampe LED", "clickUrl": "#p7", "price": "149,-" },
+    { "id": "mock-p8", "title": "Stige 3 trin", "clickUrl": "#p8", "price": "199,-" }
+  ],
+  "tracking": {
+    "endpoint": "http://localhost:4173",
+    "placementId": "00000000-0000-0000-0000-000000000001",
+    "instanceId": "00000000-0000-0000-0000-000000000002",
+    "advertiserId": "00000000-0000-0000-0000-000000000003",
+    "siteId": "00000000-0000-0000-0000-000000000004"
+  }
+}

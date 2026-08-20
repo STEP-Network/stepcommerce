@@ -1,0 +1,35 @@
+/* Internal admin — STEP Network palette (Purple #5F46D2, Deep Space #0A0320). */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #f6f5fa; color: #1c1830; font-size: 14px; }
+header { background: #0A0320; color: #fff; display: flex; align-items: center; gap: 28px; padding: 12px 24px; }
+.brand { font-size: 16px; letter-spacing: .02em; }
+.brand b { color: #C6B6F9; }
+nav { display: flex; gap: 4px; flex-wrap: wrap; }
+nav a { color: #C6B6F9; text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 13px; }
+nav a:hover { background: #1A0F3D; color: #fff; }
+main { max-width: 1100px; margin: 0 auto; padding: 28px 24px 60px; }
+h1 { font-size: 20px; margin-bottom: 18px; }
+h2 { font-size: 15px; margin: 26px 0 10px; color: #3d3568; }
+table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(10,3,32,.07); }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid #eeecf6; font-size: 13px; vertical-align: top; }
+th { background: #f1eefb; color: #3d3568; font-weight: 600; font-size: 12px; }
+tr:last-child td { border-bottom: none; }
+td code, pre code { font-size: 12px; background: #f1eefb; border-radius: 4px; padding: 1px 5px; }
+pre { background: #0A0320; color: #C6B6F9; border-radius: 8px; padding: 12px 14px; font-size: 12px; overflow-x: auto; margin: 8px 0; }
+form.panel { background: #fff; border-radius: 10px; padding: 16px; box-shadow: 0 1px 3px rgba(10,3,32,.07); display: grid; gap: 10px; max-width: 640px; }
+label { display: grid; gap: 4px; font-size: 12px; color: #3d3568; font-weight: 600; }
+input, select, textarea { font: inherit; padding: 7px 9px; border: 1px solid #d8d3ec; border-radius: 6px; width: 100%; }
+textarea { font-family: ui-monospace, monospace; font-size: 12px; min-height: 90px; }
+button { font: inherit; background: #5F46D2; color: #fff; border: none; border-radius: 6px; padding: 8px 16px; cursor: pointer; font-weight: 600; justify-self: start; }
+button:hover { background: #4c37ad; }
+button.small { padding: 4px 10px; font-size: 12px; }
+.status { display: inline-block; border-radius: 999px; padding: 1px 10px; font-size: 11px; font-weight: 700; }
+.status.healthy, .status.live, .status.active { background: #d9f2e4; color: #14663b; }
+.status.stale, .status.paused, .status.draft { background: #fdf1d6; color: #8a6116; }
+.status.failing, .status.archived { background: #fbdcdc; color: #a02222; }
+a { color: #5F46D2; }
+.muted { color: #8b85a8; font-size: 12px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.kpi { background: #fff; border-radius: 10px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(10,3,32,.07); }
+.kpi .v { font-size: 22px; font-weight: 700; color: #0A0320; }
+.kpi .l { font-size: 11px; color: #8b85a8; text-transform: uppercase; letter-spacing: .06em; margin-top: 2px; }

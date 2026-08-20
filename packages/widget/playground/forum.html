@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Playground — Template A · lav-det-selv.dk-look</title>
+<style>
+  /* Host-site imitation (lds.dk forum) — NOT part of the widget. */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif; background: #ebebeb;
+         color: #333; font-size: 14px; line-height: 1.55; }
+  .page { max-width: 700px; margin: 0 auto; padding: 18px 12px 80px; }
+  .crumb { font-size: 12px; color: #888; margin-bottom: 4px; }
+  h1 { font-size: 19px; color: #2b2b2b; margin-bottom: 14px; font-weight: 600; }
+  .post { background: #fff; border: 1px solid #ddd; border-radius: 3px; margin-bottom: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .post-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid #eee; }
+  .avatar { width: 34px; height: 34px; border-radius: 50%; background: #e6e6e6; display: flex; align-items: center; justify-content: center; color: #999; }
+  .who { flex: 1; } .who .name { font-weight: 600; color: #a33; font-size: 13.5px; }
+  .who .meta { font-size: 11px; color: #999; } .when { font-size: 11.5px; color: #888; }
+  .post-body { padding: 14px 16px 16px; }
+  .note { background:#0A0320;color:#C6B6F9;font-size:12px;border-radius:8px;padding:8px 14px;margin-bottom:18px }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="note">Playground: widgetten (midterste "indlæg") er den rigtige runtime med mock-serve-payload.</div>
+  <div class="crumb">lav-det-selv.dk › Forum › <b>Værktøj &amp; Byggematerialer</b></div>
+  <h1>Bore i loft — er det gips eller beton?</h1>
+
+  <div class="post">
+    <div class="post-head"><div class="avatar">☺</div>
+      <div class="who"><span class="name">Karen Volf</span><div class="meta">💬 4</div></div>
+      <div class="when">20-08-2026 10:19</div></div>
+    <div class="post-body">Men kan det passe at det BÅDE er gips og beton? For hvad skal jeg så bruge?</div>
+  </div>
+
+  <script async src="/dist/w.js"
+          data-placement="PLC_lds_forum"
+          data-mock="/playground/mocks/forum.json"
+          data-kv="category=vaerktoej;thread_topic=bore-beton;Domain=lav-det-selv.dk"></script>
+
+  <div class="post" style="margin-top:14px">
+    <div class="post-head"><div class="avatar">✳</div>
+      <div class="who"><span class="name">je_ns</span><div class="meta">💬 13112</div></div>
+      <div class="when">20-08-2026 12:44</div></div>
+    <div class="post-body">Er det moderne byggeri, kan loftselementerne være i beton, og ude omkring vinduslysninger er det fibergips.</div>
+  </div>
+</div>
+</body>
+</html>
