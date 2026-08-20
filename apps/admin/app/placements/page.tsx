@@ -5,7 +5,8 @@ import { query, sql } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 
 function widgetOrigin(): string {
-  return process.env.WIDGET_ORIGIN ?? process.env.PUBLIC_ORIGIN ?? 'https://widgets.stepnetwork.dk';
+  // Includes the base path — snippets must point at .../stepcommerce/w.js etc.
+  return process.env.WIDGET_ORIGIN ?? process.env.PUBLIC_ORIGIN ?? 'https://stepnetwork.dk/stepcommerce';
 }
 
 function embedSnippet(code: string): string {

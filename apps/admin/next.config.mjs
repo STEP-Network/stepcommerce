@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // The app is exposed at stepnetwork.dk/stepcommerce via a rewrite in the
+  // website project; everything (admin, /api/serve, /c/*, w.js) lives under
+  // this base path.
+  basePath: '/stepcommerce',
   async headers() {
     // The widget loader and beacons run on publisher origins.
     const cors = [

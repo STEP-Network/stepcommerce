@@ -32,13 +32,27 @@ npm run seed -w @stepcommerce/db    # pilot-skelet: madensverden.dk × vin
 npm run admin:dev
 ```
 
+## Deployment
+
+Appen kører med `basePath: '/stepcommerce'` og eksponeres på
+**stepnetwork.dk/stepcommerce** via en rewrite i website-projektet
+(`v0-step-network-website`), som proxy'er `/stepcommerce/:path*` til dette
+projekts deployment. Vercel-projekt: `stepcommerce` (root directory
+`apps/admin`, monorepo-install fra repo-roden).
+
+Databasen deles med STEP Networks øvrige apps (Neon-projekt "STEPnetwork one");
+alle tabeller ligger i det dedikerede Postgres-schema **`stepcommerce`** —
+kør `packages/db/setup-shared-db.sql` som DB-owner én gang (opretter schema +
+app-rollen `stepcommerce_app` med `search_path = stepcommerce`), og derefter
+`npm run migrate -w @stepcommerce/db` med app-rollens connection string.
+
 ## Miljøvariabler (apps/admin)
 
 | Var | Bruges til |
 |---|---|
-| `DATABASE_URL` | Neon Postgres |
-| `PUBLIC_ORIGIN` | Absolut base for klik-URLs og beacons (fx `https://widgets.stepnetwork.dk`) |
-| `WIDGET_ORIGIN` | Origin i genererede embed/GAM-snippets (default = PUBLIC_ORIGIN) |
+| `DATABASE_URL` | Neon Postgres — forbind som `stepcommerce_app` (shared DB) |
+| `PUBLIC_ORIGIN` | Absolut base inkl. base path for klik-URLs og beacons: `https://stepnetwork.dk/stepcommerce` |
+| `WIDGET_ORIGIN` | Base i genererede embed/GAM-snippets (default = PUBLIC_ORIGIN) |
 | `ADMIN_USER` / `ADMIN_PASSWORD` | Basic auth på admin-UI (V1; udelades i lokal dev) |
 | `CRON_SECRET` | Bearer-token på cron-endpoints |
 | `PREVIEW_KEY` | Tillader serve af draft-instanser med `?preview_key=` |

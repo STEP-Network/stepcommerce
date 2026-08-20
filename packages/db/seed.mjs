@@ -10,6 +10,20 @@ if (!url) {
 }
 const sql = neon(url);
 
+// The Neon HTTP driver is stateless, so the target schema must come from the
+// connecting role's default search_path (see setup-shared-db.sql). Guard
+// against seeding into the wrong schema in a shared database.
+const schemaName = process.env.DB_SCHEMA ?? 'stepcommerce';
+const [{ schemas }] = await sql`select current_schemas(false) as schemas`;
+if (schemas[0] !== schemaName) {
+  console.error(
+    `search_path resolves to [${schemas.join(', ')}] — expected "${schemaName}" first.\n` +
+    `Connect as a role with "alter role ... set search_path = ${schemaName}" (see setup-shared-db.sql), ` +
+    `or set DB_SCHEMA to override.`,
+  );
+  process.exit(1);
+}
+
 const [adv] = await sql`
   insert into advertiser (name, company_info)
   values ('Pilot Vinhandel', '{"note": "pilot advertiser — replace with signed partner"}')

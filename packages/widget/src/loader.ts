@@ -47,9 +47,14 @@ async function init(config: WidgetConfig, script?: HTMLScriptElement | null): Pr
   try {
     if (!config.placement) return;
     const kv = collectKv(script ?? null, config.kv);
-    // limited_ads is respected server-side; still forward it explicitly.
-    const origin = script?.src ? new URL(script.src).origin : window.location.origin;
-    const serveUrl = config.serveUrl ?? origin + '/api/serve';
+    // Derive the API base from the script URL including any base path
+    // (https://stepnetwork.dk/stepcommerce/w.js → .../stepcommerce/api/serve).
+    let base = window.location.origin;
+    if (script?.src) {
+      const u = new URL(script.src);
+      base = u.origin + u.pathname.replace(/\/w\.js$/, '');
+    }
+    const serveUrl = config.serveUrl ?? base + '/api/serve';
 
     const serve = await fetchServe(config, kv, serveUrl);
     if (!serve?.render) return;

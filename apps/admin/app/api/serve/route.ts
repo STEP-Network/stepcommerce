@@ -22,7 +22,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // Unresolved GAM macros arrive verbatim ("%%PATTERN:key%%") — drop them.
   for (const k of Object.keys(kv)) if (kv[k].startsWith('%%')) delete kv[k];
 
-  const origin = process.env.PUBLIC_ORIGIN ?? req.nextUrl.origin;
+  // PUBLIC_ORIGIN must include the base path (e.g. https://stepnetwork.dk/stepcommerce).
+  const origin = process.env.PUBLIC_ORIGIN ?? req.nextUrl.origin + (req.nextUrl.basePath || '');
   try {
     const result = await resolveServe({
       placementCode: body.placement,
