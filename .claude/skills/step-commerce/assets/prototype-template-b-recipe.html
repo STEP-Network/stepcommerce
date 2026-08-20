@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STEP Commerce — Vinanbefaling · madensverden.dk</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+    background: #f3efe3; color: #2e2c26; font-size: 15.5px; line-height: 1.6;
+    padding-bottom: 120px;
+  }
+  .page { max-width: 900px; margin: 0 auto; padding: 26px 16px; }
+
+  /* ===== madensverden.dk sektions-mønster ===== */
+  .sect-head { display: flex; align-items: center; gap: 10px; margin: 26px 0 14px; }
+  .sect-head .ic { width: 24px; height: 24px; flex-shrink: 0; opacity: .85; }
+  .sect-head h2 { font-family: Georgia, "Times New Roman", serif; font-weight: 500; font-size: 22px; color: #23211b; white-space: nowrap; }
+  .sect-head .rule { flex: 1; height: 1px; background: #b9b4a3; }
+  .sect-head .chev { color: #55524a; font-size: 15px; }
+  .card { background: #fff; border-radius: 12px; padding: 22px 26px; box-shadow: 0 1px 2px rgba(60,55,40,.05); }
+
+  ol.steps { padding-left: 22px; }
+  ol.steps li { margin-bottom: 13px; }
+  .ing { color: #3a66a8; }
+
+  /* ===== VIN-WIDGET (STEP Commerce, native sektion) ===== */
+  .wine-sect { position: relative; }
+  .adlabel { font-size: 10px; letter-spacing: 1.5px; color: #b3ae9d; text-transform: uppercase; margin-left: 10px; font-family: "Segoe UI", sans-serif; align-self: center; }
+  .wine-card { padding: 20px 26px 22px; }
+  .match-line { font-size: 13.5px; color: #6b6758; margin-bottom: 16px; }
+  .match-line b { color: #2e2c26; }
+  .match-chip {
+    display: inline-block; background: #f0ebdb; border: 1px solid #ddd5bd; border-radius: 12px;
+    padding: 1px 10px; font-size: 12px; color: #5c5847; margin: 0 2px;
+  }
+
+  .wines { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .wine {
+    border: 1px solid #eae5d6; border-radius: 10px; padding: 16px 14px 14px;
+    display: flex; flex-direction: column; align-items: center; text-align: center;
+    transition: box-shadow .15s, transform .15s; background: #fffdf8; position: relative;
+  }
+  .wine:hover { box-shadow: 0 4px 14px rgba(60,55,40,.12); transform: translateY(-2px); }
+  .best { position: absolute; top: -9px; left: 50%; transform: translateX(-50%);
+    background: #7a2f3a; color: #f7ecd9; font-size: 10px; letter-spacing: 1px; border-radius: 9px; padding: 1px 10px; }
+
+  /* CSS-flaske */
+  .bottle { width: 30px; height: 96px; position: relative; margin: 6px 0 12px; }
+  .bottle .neck { position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 9px; height: 30px; border-radius: 3px 3px 0 0; }
+  .bottle .body { position: absolute; bottom: 0; left: 0; right: 0; height: 72px; border-radius: 7px 7px 4px 4px; }
+  .bottle .lbl { position: absolute; bottom: 16px; left: 3px; right: 3px; height: 26px; background: #f6f0dd; border-radius: 2px;
+    font-size: 6.5px; display: flex; align-items: center; justify-content: center; color: #7d7864; letter-spacing: .5px; }
+  .red .neck, .red .body { background: linear-gradient(170deg, #4a1620, #2c0c13); }
+  .red2 .neck, .red2 .body { background: linear-gradient(170deg, #56242c, #341018); }
+  .white .neck, .white .body { background: linear-gradient(170deg, #9aa86c, #6d7c44); }
+
+  .wine .name { font-family: Georgia, serif; font-size: 15.5px; color: #23211b; line-height: 1.3; }
+  .wine .sub { font-size: 12px; color: #8a8574; margin: 3px 0 8px; }
+
+  .matchbar { width: 100%; margin: 2px 0 10px; }
+  .matchbar .mtop { display: flex; justify-content: space-between; font-size: 10.5px; color: #8a8574; margin-bottom: 3px; }
+  .matchbar .mtop b { color: #7a2f3a; }
+  .matchbar .track { height: 5px; background: #efe9d8; border-radius: 3px; overflow: hidden; }
+  .matchbar .fill { height: 100%; background: linear-gradient(90deg, #a4485a, #7a2f3a); border-radius: 3px; width: 0; transition: width 1s ease .3s; }
+
+  .why { font-size: 11.5px; color: #6b6758; min-height: 32px; margin-bottom: 10px; }
+  .price { font-size: 17px; font-weight: 700; color: #23211b; }
+  .price .was { font-size: 12px; color: #b3ae9d; text-decoration: line-through; font-weight: 400; margin-left: 4px; }
+  .buy {
+    margin-top: 9px; width: 100%; border: none; border-radius: 7px; cursor: pointer;
+    background: #7a2f3a; color: #f7ecd9; font-family: inherit; font-size: 13.5px; font-weight: 600; padding: 9px 0;
+    transition: background .15s;
+  }
+  .buy:hover { background: #63242e; }
+  .wfoot { display: flex; justify-content: space-between; align-items: center; margin-top: 15px;
+    font-size: 10.5px; color: #b3ae9d; }
+  .wfoot a { color: #b3ae9d; }
+  .wfoot .adv { display: flex; align-items: center; gap: 6px; }
+  .adv-logo { background: #23211b; color: #f7ecd9; font-family: Georgia, serif; font-size: 10px; letter-spacing: 1.5px; padding: 2px 8px; border-radius: 2px; }
+
+  /* KV-panel (prototype) */
+  .kvpanel { margin-top: 14px; background: #23211b; color: #d8d3c2; border-radius: 10px; padding: 14px 18px; font-size: 12px; display: none; }
+  .kvpanel.show { display: block; }
+  .kvpanel .t { color: #8CF0FF; font-family: "Consolas", monospace; font-size: 11px; letter-spacing: 1px; margin-bottom: 8px; }
+  .kv { display: inline-block; font-family: "Consolas", monospace; font-size: 11px; background: #35322a; border-radius: 4px; padding: 2px 8px; margin: 0 4px 5px 0; }
+  .kv b { color: #C6B6F9; font-weight: 600; }
+  .kv.hit { outline: 1px solid #8CF0FF; }
+  .arrow { color: #8CF0FF; margin: 0 6px; }
+  .derived { color: #fff; }
+
+  @media (max-width: 640px) { .wines { grid-template-columns: 1fr; } .why { min-height: 0; } }
+  @media (prefers-reduced-motion: reduce) { .matchbar .fill { transition: none; } .wine { transition: none; } }
+
+  /* ===== Prototype-kontrol ===== */
+  .protobar {
+    position: fixed; bottom: 0; left: 0; right: 0; background: #0A0320; color: #C6B6F9; font-size: 12px;
+    padding: 10px 16px; display: flex; gap: 18px; align-items: center; flex-wrap: wrap; z-index: 50;
+    box-shadow: 0 -3px 12px rgba(0,0,0,.3);
+  }
+  .protobar b { color: #fff; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
+  .protobar label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Fremgangsmåde (host-sitets sektion, forkortet) -->
+  <div class="sect-head">
+    <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#55524a" stroke-width="1.6"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 5v5"/></svg>
+    <h2>Fremgangsmåde</h2><div class="rule"></div><span class="chev">⌄</span>
+  </div>
+  <div class="card">
+    <ol class="steps">
+      <li>Dup <span class="ing">skinkeschnitzlerne</span> tørre, og krydr med <span class="ing">salt</span> og friskkværnet <span class="ing">peber</span>.</li>
+      <li>Læg en kvist frisk <span class="ing">rosmarin</span> på hvert stykke kød, fold en skive <span class="ing">Fanø skinke</span> omkring, og sæt fast med en tandstikker.</li>
+      <li>Vend bunden i <span class="ing">hvedemel</span>, og steg schnitzlerne i <span class="ing">smør</span> og <span class="ing">olie</span> — ca. et minut på hver side.</li>
+    </ol>
+  </div>
+
+  <!-- ============ STEP COMMERCE: VIN-WIDGET (native sektion) ============ -->
+  <div class="wine-sect" id="widget">
+    <div class="sect-head">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#55524a" stroke-width="1.6"><path d="M8 3h8l-.6 6.2a3.4 3.4 0 0 1-6.8 0L8 3zM12 12.5V20M8.5 20h7"/></svg>
+      <h2>Vin til denne ret</h2><span class="adlabel">Annonce</span><div class="rule"></div><span class="chev">⌄</span>
+    </div>
+
+    <div class="card wine-card">
+      <div class="match-line" id="matchline">
+        Udvalgt til opskriftens ingredienser:
+        <span class="match-chip">svinekød</span><span class="match-chip">skinke</span><span class="match-chip">rosmarin</span>
+        — retten er <b>let og salt-krydret</b>, så vinen skal have frugt og frisk syre.
+      </div>
+
+      <div class="wines">
+        <div class="wine">
+          <div class="bottle red2"><div class="neck"></div><div class="body"><div class="lbl">VALPOLICELLA</div></div></div>
+          <div class="name">Valpolicella Classico</div>
+          <div class="sub">Rødvin · Veneto, Italien</div>
+          <div class="matchbar"><div class="mtop"><span>Match til retten</span><b>96%</b></div><div class="track"><div class="fill" data-w="96%"></div></div></div>
+          <div class="why fx">Let rødvin med kirsebærfrugt — trykker ikke det fine svinekød flad.</div>
+          <div class="price">89,-<span class="was">119,-</span></div>
+          <button class="buy">Se vinen →</button>
+        </div>
+        <div class="wine">
+          <span class="best">Bedste match</span>
+          <div class="bottle red"><div class="neck"></div><div class="body"><div class="lbl">PINOT NOIR</div></div></div>
+          <div class="name">Pinot Noir Réserve</div>
+          <div class="sub">Rødvin · Bourgogne, Frankrig</div>
+          <div class="matchbar"><div class="mtop"><span>Match til retten</span><b>98%</b></div><div class="track"><div class="fill" data-w="98%"></div></div></div>
+          <div class="why fx">Klassikeren til skinke og rosmarin — silkeblød med saftig syre.</div>
+          <div class="price">129,-</div>
+          <button class="buy">Se vinen →</button>
+        </div>
+        <div class="wine">
+          <div class="bottle white"><div class="neck"></div><div class="body"><div class="lbl">RIESLING</div></div></div>
+          <div class="name">Riesling Trocken</div>
+          <div class="sub">Hvidvin · Mosel, Tyskland</div>
+          <div class="matchbar"><div class="mtop"><span>Match til retten</span><b>93%</b></div><div class="track"><div class="fill" data-w="93%"></div></div></div>
+          <div class="why fx">Til dig, der vil have hvid: sprød syre, der løfter den salte Fanø skinke.</div>
+          <div class="price">99,-</div>
+          <button class="buy">Se vinen →</button>
+        </div>
+      </div>
+
+      <div class="wfoot">
+        <span class="adv">Tilbud fra <span class="adv-logo">VINHANDLEN</span></span>
+        <span>Annonce · leveres af STEP Commerce · <a href="#">Hvorfor ser jeg denne?</a></span>
+      </div>
+
+      <!-- Prototype: side-data der driver matchet -->
+      <div class="kvpanel" id="kvpanel">
+        <div class="t">SIDE-DATA (GAM KEY-VALUES) → SEGMENT</div>
+        <span class="kv"><b>mv_cat:</b> aftensmad</span>
+        <span class="kv hit"><b>mv_ingredients:</b> skinkeschnitzler, salt og friskkværnet peber, rosmarin, Fanø skinke, hvedemel…</span>
+        <span class="kv"><b>mv_totalTime:</b> 15m</span>
+        <span class="kv"><b>mv_recipeYield:</b> 4 personer</span>
+        <span class="kv"><b>Domain:</b> madensverden.dk</span>
+        <div style="margin-top:8px"><span class="arrow">⭢</span><span class="derived">Afledt segment: <b style="color:#8CF0FF">svinekød / let ret</b> → produktregel: <span style="font-family:Consolas,monospace">pairing IN (svinekød) AND body &lt;= medium</span></span></div>
+      </div>
+    </div>
+  </div>
+  <!-- ============ /WIDGET ============ -->
+
+  <!-- Dine noter (host-sitets næste sektion) -->
+  <div class="sect-head">
+    <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#55524a" stroke-width="1.6"><path d="M3 3l18 18M10.5 5.2A9.8 9.8 0 0 1 12 5c7 0 10 7 10 7a16.5 16.5 0 0 1-3 3.9M6.2 6.2A16.4 16.4 0 0 0 2 12s3 7 10 7c1.8 0 3.4-.5 4.8-1.2"/></svg>
+    <h2>Dine noter</h2><div class="rule"></div><span class="chev">⌄</span>
+  </div>
+  <div class="card"><a href="#" style="color:#23211b">Klik her for at tilføje dine egne noter.</a></div>
+</div>
+
+<!-- ===== Prototype-kontrol ===== -->
+<div class="protobar">
+  <b>Prototype</b>
+  <label><input type="checkbox" id="kvChk"> Vis side-data (key-values → segment)</label>
+  <label><input type="checkbox" id="whyChk" checked> "Derfor"-forklaring pr. vin</label>
+  <label><input type="checkbox" id="barChk" checked> Match-score</label>
+</div>
+
+<script>
+  // animer match-bars ved load (IntersectionObserver = samme mekanik som viewability-måling)
+  const io = new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting) { e.target.style.width = e.target.dataset.w; io.unobserve(e.target); }
+  }), { threshold: .4 });
+  document.querySelectorAll('.fill').forEach(f => io.observe(f));
+
+  document.querySelectorAll('.buy').forEach(b => b.addEventListener('click', () =>
+    alert('→ Her åbnes produktsiden (deeplink med klik-tracking via STEP Commerce)')));
+
+  document.getElementById('kvChk').addEventListener('change', e =>
+    document.getElementById('kvpanel').classList.toggle('show', e.target.checked));
+  document.getElementById('whyChk').addEventListener('change', e =>
+    document.querySelectorAll('.why').forEach(w => w.style.display = e.target.checked ? '' : 'none'));
+  document.getElementById('barChk').addEventListener('change', e =>
+    document.querySelectorAll('.matchbar').forEach(m => m.style.display = e.target.checked ? '' : 'none'));
+</script>
+</body>
+</html>

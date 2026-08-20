@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STEP Commerce — Native forum-widget · lav-det-selv.dk × Harald Nyborg</title>
+<style>
+  /* ===== Forum host-site look (matcher lds.dk) ===== */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+    background: #ebebeb;
+    color: #333;
+    font-size: 14px;
+    line-height: 1.55;
+    padding-bottom: 120px;
+  }
+  .page { max-width: 700px; margin: 0 auto; padding: 18px 12px; }
+  .crumb { font-size: 12px; color: #888; margin-bottom: 4px; }
+  .crumb b { color: #555; }
+  h1.thread { font-size: 19px; color: #2b2b2b; margin-bottom: 14px; font-weight: 600; }
+
+  .post {
+    background: #fff; border: 1px solid #ddd; border-radius: 3px;
+    margin-bottom: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  }
+  .post-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border-bottom: 1px solid #eee;
+  }
+  .avatar {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: #e6e6e6; display: flex; align-items: center; justify-content: center;
+    font-size: 16px; color: #999; flex-shrink: 0; overflow: hidden;
+  }
+  .who { flex: 1; }
+  .who .name { font-weight: 600; color: #a33; font-size: 13.5px; }
+  .badge {
+    display: inline-block; font-size: 10px; background: #eee; color: #666;
+    border: 1px solid #ccc; border-radius: 8px; padding: 0 7px; margin-left: 5px; vertical-align: 1px;
+  }
+  .who .meta { font-size: 11px; color: #999; margin-top: 1px; }
+  .when { font-size: 11.5px; color: #888; }
+  .post-body { padding: 14px 16px 16px; }
+  .quote {
+    border-left: 3px solid #e8a33d; background: #fbfaf7; border: 1px dotted #ddd;
+    border-left: 3px solid #e8a33d; padding: 9px 12px; margin-bottom: 12px;
+    font-size: 12.5px; color: #777; font-style: italic;
+  }
+  .quote .qwho { font-size: 11px; margin-bottom: 4px; color: #999; }
+  .sig { border-top: 1px solid #eee; margin-top: 14px; padding-top: 7px; font-size: 11.5px; color: #999; font-style: italic; }
+
+  /* ===== ANNONCE-WIDGET (STEP Commerce) ===== */
+  .sc-widget { position: relative; }
+  .sc-widget.native { /* arver .post-stilen fuldstændigt */ }
+  .sc-adlabel {
+    position: absolute; top: 10px; right: 14px;
+    font-size: 9.5px; letter-spacing: 1.5px; color: #b5b5b5; text-transform: uppercase;
+  }
+  .hn-avatar { background: #10357F; padding: 6px; }
+  .hn-avatar img { width: 100%; height: auto; display: block; }
+  .sc-widget .name { color: #10357F !important; }
+  .sc-badge { background: #e8f5fc; border-color: #a8d4ec; color: #0b6ea0; }
+
+  .sc-copy { margin-bottom: 12px; }
+  .sc-flex { display: flex; gap: 16px; align-items: stretch; }
+
+  /* --- Tilbudsavis med bladre-effekt --- */
+  .avis-wrap { flex-shrink: 0; perspective: 900px; width: 148px; }
+  .avis {
+    position: relative; width: 148px; height: 196px; border-radius: 3px;
+    box-shadow: 0 3px 10px rgba(0,0,0,.18); cursor: pointer;
+  }
+  .avis-page {
+    position: absolute; inset: 0; border-radius: 3px; overflow: hidden;
+    backface-visibility: hidden; transform-origin: left center;
+    transition: transform 1.1s cubic-bezier(.55,.06,.24,.99);
+    background: #fff;
+  }
+  .avis-page.flipped { transform: rotateY(-102deg); opacity: 0; transition: transform 1.1s cubic-bezier(.55,.06,.24,.99), opacity .3s .8s; }
+  /* forside */
+  .pg-front { background: linear-gradient(165deg, #0097D6 0%, #10357F 78%); color: #fff; display: flex; flex-direction: column; padding: 12px 12px 10px; }
+  .pg-front .hn-logo img { width: 108px; height: auto; display: block; }
+  .pg-front .uge { font-size: 10px; opacity: .85; margin-top: 1px; }
+  .pg-front .hero {
+    margin-top: auto; background: rgba(255,255,255,.16); border-radius: 4px; padding: 8px;
+    font-size: 11px; line-height: 1.35;
+  }
+  .splash {
+    position: absolute; top: 58px; right: 8px; width: 62px; height: 62px;
+    background: #FFED00; color: #E40712; border-radius: 50%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-weight: 800; transform: rotate(8deg); box-shadow: 0 2px 5px rgba(0,0,0,.25);
+  }
+  .splash .p { font-size: 15px; line-height: 1; }
+  .splash .l { font-size: 8px; font-weight: 700; }
+  /* opslag-sider */
+  .pg-spread { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 10px; background: #f7f5f0; }
+  .offer { background: #fff; border: 1px solid #e5e2da; border-radius: 3px; padding: 6px; position: relative; font-size: 9.5px; }
+  .offer .ph { height: 38px; border-radius: 2px; margin-bottom: 5px; }
+  .offer .t { font-weight: 600; color: #333; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .offer .pr { color: #E40712; font-weight: 800; font-size: 12px; margin-top: 2px; }
+  .offer .was { color: #aaa; text-decoration: line-through; font-size: 8.5px; margin-left: 3px; font-weight: 400; }
+  .ph1 { background: linear-gradient(135deg,#8fb6d9,#5d87ad); } .ph2 { background: linear-gradient(135deg,#d9c48f,#ad8f5d); }
+  .ph3 { background: linear-gradient(135deg,#9dd08f,#6aa05c); } .ph4 { background: linear-gradient(135deg,#d08f9d,#a05c6a); }
+  .corner {
+    position: absolute; bottom: 0; right: 0; width: 26px; height: 26px;
+    background: linear-gradient(315deg, #ebebeb 47%, rgba(0,0,0,.14) 50%, #fff 53%);
+    border-radius: 3px 0 3px 0;
+    animation: peel 2.6s ease-in-out infinite;
+  }
+  @keyframes peel { 0%,100% { width: 26px; height: 26px; } 50% { width: 34px; height: 34px; } }
+
+  /* --- Højre side: tekst + kontekst-tilbud + CTA --- */
+  .sc-right { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .ctx-offers { display: flex; gap: 8px; margin: 2px 0 12px; }
+  .ctx {
+    flex: 1; border: 1px solid #e7e7e7; border-radius: 4px; padding: 8px 9px;
+    font-size: 11.5px; background: #fafafa; min-width: 0;
+  }
+  .ctx .ct { font-weight: 600; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ctx .cp { color: #E40712; font-weight: 800; font-size: 13px; }
+  .ctx .cl { font-size: 9.5px; color: #999; }
+  .ctx-label { font-size: 10px; color: #0b6ea0; text-transform: uppercase; letter-spacing: .8px; margin-bottom: 5px; }
+  .sc-cta {
+    margin-top: auto; align-self: flex-start;
+    background: #FFED00; color: #10357F; border: none; border-radius: 4px;
+    padding: 9px 18px; font-size: 13.5px; font-weight: 600; cursor: pointer;
+    font-family: inherit; transition: background .15s;
+  }
+  .sc-cta:hover { background: #f5e200; }
+  .sc-cta.pulse { animation: pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,237,0,.65);} 55% { box-shadow: 0 0 0 9px rgba(255,237,0,0);} }
+  .sc-foot { font-size: 10px; color: #bbb; margin-top: 8px; }
+  .sc-foot a { color: #bbb; }
+
+  @media (max-width: 560px) {
+    .sc-flex { flex-direction: column; }
+    .avis-wrap { align-self: center; }
+    .ctx-offers { flex-wrap: wrap; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .avis-page, .corner, .sc-cta.pulse { animation: none !important; transition: none !important; }
+  }
+
+  /* ===== Prototype-kontrol (IKKE en del af widgetten) ===== */
+  .protobar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: #0A0320; color: #C6B6F9; font-size: 12px;
+    padding: 10px 16px; display: flex; gap: 18px; align-items: center; flex-wrap: wrap;
+    box-shadow: 0 -3px 12px rgba(0,0,0,.3); z-index: 50;
+  }
+  .protobar b { color: #fff; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
+  .protobar label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+  .protobar select { background: #1A0F3D; color: #fff; border: 1px solid #5F46D2; border-radius: 3px; padding: 2px 6px; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="crumb">lav-det-selv.dk › Forum › <b>Værktøj & Byggematerialer</b></div>
+  <h1 class="thread">Bore i loft — er det gips eller beton?</h1>
+
+  <!-- almindeligt forumindlæg -->
+  <div class="post">
+    <div class="post-head">
+      <div class="avatar">☺</div>
+      <div class="who"><span class="name">Karen Volf</span><span class="badge">Trådstarter</span>
+        <div class="meta">💬 4</div></div>
+      <div class="when">20-08-2026 10:19</div>
+    </div>
+    <div class="post-body">
+      <div class="quote"><div class="qwho">je_ns skrev den 20-08-2026 09:33</div>
+        Det ligner gipsplade, du kan købe en speciel pluks til det, så kan du sagtens hænge din lampe op.</div>
+      Men kan det passe at det BÅDE er gips og beton? For hvad skal jeg så bruge (om det er plugs eller reparation).
+    </div>
+  </div>
+
+  <!-- almindeligt forumindlæg -->
+  <div class="post">
+    <div class="post-head">
+      <div class="avatar">☺</div>
+      <div class="who"><span class="name">S. Fabrin</span>
+        <div class="meta">💬 19743 &nbsp; 💡 4400</div></div>
+      <div class="when">20-08-2026 11:43</div>
+    </div>
+    <div class="post-body">
+      Ja, det kan passe, at der både er beton og gipsplade. Du kan bore et hul i betonen og sætte en plug i
+      hullet og skrue en loftskrog i. Du kan f.eks. bruge et 5 mm bor og en 5 mm plug, den kan holde.
+      <div class="sig">fase</div>
+    </div>
+  </div>
+
+  <!-- ============ STEP COMMERCE WIDGET (native variant) ============ -->
+  <div class="post sc-widget native" id="widget">
+    <span class="sc-adlabel">Annonce</span>
+    <div class="post-head">
+      <div class="avatar hn-avatar"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNzEiIGhlaWdodD0iODAiIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyNzEgODAiPgogIDxwYXRoIGZpbGw9IiNGRkVEMDAiIGZpbGwtcnVsZT0iZXZlbm9kZCIgZD0iTTEzOC40MjkgMjMuMjYycy0uMzgyLS45NTMuOTUzLS45NTNoNS44MTZzMS41MjYuOTUzIDEuNTI2IDEuMzM1YzAgMCAyLjc2NC0yLjE5MyA2LjAwNS0yLjA5OCAzLjI0My4wOTYgNi4zODcgMy4zMzcgNi40ODQgOC4wMDh2MjcuNTUzcy4xOS44NTgtLjk1My44NThoLTYuMTk3cy0uNjY4LjQ3Ny0uNjY4LTEuMDQ4VjMxLjY1MnMwLTIuMTkzLTIuMzgzLTIuMTkzYy0yLjM4NSAwLTIuOTU2IDIuMTkzLTIuOTU2IDIuMTkzdjI1LjM2czAgLjk1My0xLjA0OS45NTNoLTUuODE1cy0uNzYzLjE5LS43NjMtLjk1M3YtMzMuNzV6TTE3NC41NjEgNTcuMjAycy0yLjc2NiAyLjE5NC02LjAwNiAyLjA5OWMtMy4yNDItLjA5OC02LjU3OS0yLjg2MS02LjY3NS03LjUzM1YyMy4yNjNzLS4xODktLjg2Ljk1NC0uODZoNi4xOTdzLjg1OC0uNDc1Ljg1OCAxLjA1djI1Ljc0czAgMi4xOTMgMi4zODQgMi4xOTNjMi4zODMgMCAyLjk1NS0yLjE5MyAyLjk1NS0yLjE5M1YyMy4zNThzMC0uOTU0IDEuMDQ4LS45NTRoNS44MTZzLjc2NC0uMTkuNzY0Ljk1NHYzNC4yMjZzLjQ3NiA4LjAwOC02LjM4OCAxMS4wNThjMCAwLTUuOTEyIDIuNjctMTIuMjk5LS4xOSAwIDAtLjU3MS4xOS0uNTcxLTEuMTQ2di00LjI4OHMtLjE5Mi0uOTU0Ljg1OS0uNjY4YzAgMCAxMS4xNTMgMy43MTkgMTAuMTA0LTUuMTQ4ek0xOTYuODcgNTEuMjkyYzIuMzg0IDAgMi4wOTgtMi4xIDIuMDk4LTIuMVYzMi41MXMwLTIuMjg3LTIuMDk4LTIuMjg3LTIuMzg0IDIuMjg3LTIuMzg0IDIuMjg3djE2LjU4OXMwIDIuMTkzIDIuMzg0IDIuMTkzem0tMTAuNTg0LTM5LjM3NGMtLjA5NC0xLjMzNSAxLjMzNi0xLjA1IDEuMzM2LTEuMDVoNS43MmMxLjI0IDAgMS4xNDQuODU4IDEuMTQ0Ljg1OHYxMS44MjNjMy4yNDEtMi4wOTcgNS44MTctMS44MTIgNS44MTctMS44MTIgNy4xNDkuNTcyIDYuNzY4IDguNTggNi43NjggOC41OHYyMC42ODhjLS4wOTYgNC42NzItMy4yNDIgNy45MTQtNi40ODMgOC4wMDktMy4yNC4wOTUtNi4wMDYtMi4wOTctNi4wMDYtMi4wOTcgMCAuMzc5LTEuNTI1IDEuMzM0LTEuNTI1IDEuMzM0aC01LjgxN2MtMS4zMzMgMC0uOTU0LS45NTUtLjk1NC0uOTU1VjExLjkxOHpNMjMwLjcxNiA1MC4yNDNWMzEuMjdzLS45NTQtOS43MjQtMTAuMzkzLTkuNzI0Yy05LjQzOCAwLTEwLjM5MiA5LjYzLTEwLjM5MiA5LjYzdjE5LjM1M2MuMjg3IDIuMDk4IDEuNzE3IDkuMDU2IDEwLjM5MiA5LjA1NiA5LjcyNCAwIDEwLjM5My05LjM0MiAxMC4zOTMtOS4zNDJ6bS0xMi43NzYtLjI4N3YtMTguNTlzMC0yLjAwMyAyLjM4My0yLjAwM2MyLjM4NCAwIDIuMzg0IDEuOTA3IDIuMzg0IDEuOTA3djE4LjU5MXMtLjE5MSAxLjkwNy0yLjQ3NyAxLjkwN2MtMi4yOSAwLTIuMjktMS44MTItMi4yOS0xLjgxMnpNMjQxLjU4MiAzNS4yNzV2MjEuODNzMCAuODYtMS4wNDguODZoLTYuMjkycy0uNjY3LjE5LS42NjctLjk1M3YtMzMuNzVzMC0uOTUzLjc2Mi0uOTUzaDYuNTc4cy45NTQuNTcyIDEuMzM2IDEuNDNjMCAwIDMuNDMxLTIuNTczIDYuODYyLTEuNDMgMCAwIC41NzMuMDk1LjA5Ni44NTggMCAwLTIuMzg0IDIuMjg4LTMuMjQgNi40ODMgMCAwLS4xOTIuNjY3LTEuMDUgMS4wNDkgMCAwLTMuMzM3IDEuMTQ0LTMuMzM3IDQuNTc2ek0yNTYuMjY0IDU4LjgyM2MzLjUyOSAwIDUuNjI1LTIuMDk5IDUuNjI1LTIuMDk5IDAgMy43Mi0xLjMzNCA0LjU3OC0xLjMzNCA0LjU3OC0xLjkwNyAyLjA5NS03LjM0Ljk1Mi04Ljg2NC41NzEtMS41MjktLjM4Mi0xLjE0Ny42NjYtMS4xNDcuNjY2djQuNjczYzAgMS4zMzQuNjY4IDEuMjQuNjY4IDEuMjQgNC4wOTkgMS44MTEgOS4xNTQuODU4IDkuMTU0Ljg1OCA5LjgxNy0yLjM4MyA5LjYyNy05LjM0NCA5LjYyNy05LjM0NHYtMzYuOGMwLS45NTQtLjg1OC0uODU3LS44NTgtLjg1N2gtNS4zNGMtMi4wMDEgMC0yLjAwMS42NjYtMi4wMDEuNjY2LTIuNTc1LTEuOTA2LTUuMzM4LTEuNTI1LTUuMzM4LTEuNTI1LTcuNDM3IDEuMDUtNy40MzcgOC43NzEtNy40MzcgOC43NzF2MjAuNTkzYzAgNC4xOTYgMy43MTkgOC4wMSA3LjI0NSA4LjAxem0uODU4LTkuNTgzVjMxLjYwNHMwLTIuMDAzIDIuMzg1LTIuMDAzYzIuMzgyIDAgMi4zODIgMS45MDcgMi4zODIgMS45MDd2MTcuNjM4cy0uMTg4IDEuOTA2LTIuNDc3IDEuOTA2Yy0yLjI5IDAtMi4yOS0xLjgxMi0yLjI5LTEuODEyek0xMTUuOTI5IDQ4Ljc2NVYzMi4xNzdzLS4yODYtMi4yODgtMi4zODMtMi4yODhjLTIuMDk4IDAtMi4wOTggMi4yODgtMi4wOTggMi4yODhWNDguODZzLS4yODYgMi4wOTggMi4wOTggMi4wOThjMi4zODMgMCAyLjM4My0yLjE5MyAyLjM4My0yLjE5M3ptOC4xOTgtMjUuNTV2MzMuNzQ4cy4zODIuOTU0LS45NTIuOTU0aC01LjgxNnMtMS41MjUtLjk1NC0xLjUyNS0xLjMzNmMwIDAtMi43NjYgMi4xOTQtNi4wMDcgMi4xLTMuMjQxLS4wOTUtNi4zODctMy4zMzctNi40ODItOC4wMVYyOS45ODRzLS4zODItOC4wMSA2Ljc2OC04LjU4YzAgMCAyLjU3NC0uMjg2IDUuODE2IDEuODEyVjExLjM5M3MtLjA5NS0uODU4IDEuMTQ0LS44NThoNS43MnMxLjQzMS0uMjg2IDEuMzM0IDEuMDQ5djExLjYzMnpNOTMuMTQ0IDU3LjkxN2MtMS4zMzUgMC0uOTU0LS45NTQtLjk1NC0uOTU0VjExLjU4NGMtLjA5NS0xLjMzNCAxLjMzNS0xLjA1IDEuMzM1LTEuMDVoNS43MjFjMS4yMzggMCAxLjE0NC44NiAxLjE0NC44NlY1Ny4yNXMtLjA5Ny43MTYtMS4wNDkuNzE2bC02LjE5Ny0uMDV6TTgwLjc1IDQ4Ljc2NVYzMi4xNzdzLS4yODctMi4yODgtMi4zODMtMi4yODhjLTIuMDk4IDAtMi4wOTggMi4yODgtMi4wOTggMi4yODhWNDguODZzLS4yODYgMi4wOTggMi4wOTggMi4wOThjMi4zODMgMCAyLjM4My0yLjE5MyAyLjM4My0yLjE5M3ptOC4yLTI1LjU1djMzLjc0OHMuMzguOTU0LS45NTQuOTU0SDgyLjE4cy0xLjUyNS0uOTU0LTEuNTI1LTEuMzM2YzAgMC0yLjc2NiAyLjE5NC02LjAwNyAyLjEtMy4yNC0uMDk1LTYuMzg4LTMuMzM3LTYuNDgyLTguMDFWMjkuOTg0cy0uMzgyLTguMDEgNi43NjgtOC41OGMwIDAgMi41NzQtLjI4NiA1LjgxNiAxLjgxMmwuMDk1LS4wNXMtLjA5NS0uODU2IDEuMTQ0LS44NTZoNS43MnMxLjQzLS4yODcgMS4zMzQgMS4wNDdsLS4wOTQtLjE0MXpNNDEuNDcxIDQ4Ljc2NVYzMi4xNzdzLS4yODYtMi4yODgtMi4zODMtMi4yODhjLTIuMDk4IDAtMi4wOTggMi4yODgtMi4wOTggMi4yODhWNDguODZzLS4yODYgMi4wOTggMi4wOTggMi4wOThjMi4zODMgMCAyLjM4My0yLjE5MyAyLjM4My0yLjE5M3ptOC4yLTI1LjU1djMzLjc0OHMuMzguOTU0LS45NTQuOTU0aC01LjgxNnMtMS41MjUtLjk1NC0xLjUyNS0xLjMzNmMwIDAtMi43NjYgMi4xOTQtNi4wMDcgMi4xLTMuMjQtLjA5NS02LjM4Ny0zLjMzNy02LjQ4Mi04LjAxVjI5Ljk4NHMtLjM4Mi04LjAxIDYuNzY4LTguNThjMCAwIDIuNTc0LS4yODYgNS44MTYgMS44MTJsLjA5NS0uMDVzLS4wOTUtLjg1NiAxLjE0NC0uODU2aDUuNzIxczEuNDMtLjI4NyAxLjMzNSAxLjA0N2wtLjA5Ni0uMTQxek02MC41MzkgMzQuNzk4djIyLjMwOXMwIC44NTgtLjk1NC44NThoLTYuMTAxcy0uNzYyLjA5NS0uNzYyLS43NjN2LTM0LjMyczAtLjU3My43NjItLjU3M2g2LjI5MnMuODU4LjU3MyAxLjMzNSAxLjE0NGMwIDAgMy42MjItMi4xOTMgNi40ODItMS40MyAwIDAgMS4yNC4wOTYuMzgyIDEuMjM5IDAgMC0yLjQ4IDIuMjg4LTIuODYgNi4wMDcgMCAwIC4wOTUgMS4yMzgtMi4wMDIgMS42Mi0yLjA5OC4zODEtMi41NzQgMy45MDktMi41NzQgMy45MDl6TTI2LjEyMiAzMC43OTR2MjYuMjE4cy4wOTUuOTU0LS44NTcuOTU0aC02LjEwM3MtLjY2Ny4wOTQtLjY2Ny0uODU4VjMyLjQxNXMuNTcyLTIuODYtMi4xOTMtMi45NTZjLTIuNzY0LS4wOTUtMi43NjQgMi45NTYtMi43NjQgMi45NTZ2MjQuODgycy0uMDk1LjY2OS0uNjY4LjY2OUg2LjE5N3MtLjY2Ny4wOTQtLjY2Ny0uNzY0VjIzLjQ1NHMwLTEuMDUtLjc2My0xLjQzMUwuOTU0IDIwLjExN3MtLjY2OC4xOS0uNjY4LTEuMTQ0di0yLjI4OFMwIDE1LjU0IDEuNjIgMTUuNDQ1bDEwLjk2NS0uNTcxcy45NTMtLjM4Mi45NTMuODU3djguMTk5czQuMjktMy4zMzcgNy42MjctMS42MmMzLjMzNyAxLjcxNyA0Ljk1NyAzLjI0IDQuOTU3IDguNDg0ek0xNS44MjYgMTEuNjMxcy02LjEwMiAzLjE0Ny0xMS41MzYtLjc2M2MwIDAtNC4xOTUtMy4zMzYtNC4wMDMtOS43MjMgMCAwIDAtLjc2NS43NjItLjc2NUg1LjUzczEuMDQ4LS4yODQgMS4xNDMuNzY1Yy4wOTUgMS4wNDcuNDc3IDYuOTU4IDQuMTk2IDYuODYzIDMuNzE4LS4wOTYgMy44MTMtNi44NjMgMy44MTMtNi44NjNzLS4wOTUtLjc2NS43NjItLjc2NWg0LjY3M3MuODU3LS4xODkuOTUyLjY2OWMuMDk3Ljg1OC4yODYgMy4yNDEtLjQ3NiA1LjUyOSAwIDAgMy4xNDctLjU3MiA0LjAwNC01LjUyOSAwIDAtLjI4Ni0uNjY5Ljg1OC0uNjY5aDQuNjcyczEuMDUtLjM4Ljk1Mi44NTljLS4wOTUgMS4yNC0uMjg1IDEwLjU4My0xNS4yNTMgMTAuMzkyek01LjQ4OSA3MC45NTJoNS44MDN2LTIuNjk4SDUuNDg5djIuNjk4ek0xNy4wMDMgNjQuNjVoLS4wMzhsLS45NDggNS4zOGgxLjkzNGwtLjk0OC01LjM4em0tMi4xOTUtMi41OWg0LjM1MmwzLjIzNyAxMi42NzJoLTMuNjgzbC0uMzU0LTIuMjE5aC0yLjc1MmwtLjM1NCAyLjIySDExLjU3bDMuMjM3LTEyLjY3NHpNMjIuOTc1IDYyLjA1OWgzLjQ1OXY5Ljk3Nmg0LjI2djIuNjk3aC03LjcyVjYyLjA1OXpNMzEuOTU5IDY0Ljg2M2gtMi42MDR2LTIuODA1aDguNjY4djIuODA1aC0yLjYwNXY5Ljg2OGgtMy40NTl2LTkuODY4ek0zOC42NzUgNzQuNzMyaDMuNDU5VjYyLjA1OWgtMy40NnYxMi42NzN6TTQ3LjEgNzIuMzUzaC42ODljMS4zMzkgMCAxLjUwNy0uNTMyIDEuNTA3LTMuOTU4cy0uMTY4LTMuOTU4LTEuNTA3LTMuOTU4SDQ3LjF2Ny45MTZ6bS0zLjQ1OC0xMC4yOTVoNS4wMmM0IDAgNC4yMDUgMy4wMTggNC4yMDUgNi4zMzcgMCAzLjMyLS4yMDUgNi4zMzYtNC4yMDQgNi4zMzZoLTUuMDIxVjYyLjA1OHpNNTkuMTU1IDYyLjA1OWgzLjQ1OXY5Ljk3Nmg0LjI2djIuNjk3aC03LjcyVjYyLjA1OXoiIGNsaXAtcnVsZT0iZXZlbm9kZCIvPgogIDxwYXRoIGZpbGw9IiNGRkVEMDAiIGZpbGwtcnVsZT0iZXZlbm9kZCIgZD0iTTcyLjEzOCA2NC42NUg3Mi4xbC0uOTQ3IDUuMzhoMS45MzNsLS45NDgtNS4zOHptLTIuMTk1LTIuNTloNC4zNTNsMy4yMzYgMTIuNjcySDczLjg1bC0uMzU0LTIuMjE5aC0yLjc1MmwtLjM1MyAyLjIyaC0zLjY4NGwzLjIzNy0xMi42NzR6TTc2LjM0NCA2Mi4wNTloMy42ODJsMS4zOTYgOS41NDloLjAzNmwxLjM5Ni05LjU1aDMuNjgzbC0yLjg2NCAxMi42NzRoLTQuNDY1bC0yLjg2NC0xMi42NzN6TTg3LjA5NSA2Mi4wNTloNy44Njh2Mi42OTdoLTQuNDF2Mi4xNjZoNC4xM3YyLjU5MmgtNC4xM3YyLjUyaDQuNTc3djIuNjk4aC04LjAzNVY2Mi4wNTl6TTEwNC41NjIgNjcuNTI1aC42NTJjLjg3MyAwIDEuMzM5LS40NzkgMS4zMzktMS41NDUgMC0xLjA0Ni0uNDY2LTEuNTQzLTEuMzM5LTEuNTQzaC0uNjUydjMuMDg4em0tMy40NTktNS40NjZoNS4xODljMi42NDEgMCAzLjgzMSAxLjY4NSAzLjgzMSAzLjkwNCAwIDIuNTkxLTEuNTQzIDMuOTQxLTQuMzUyIDMuOTQxaC0xLjIwOXY0LjgyOGgtMy40NTlWNjIuMDZ6TTExNC42ODEgNjcuNDJoLjY4OGMuOTg2IDAgMS40NTEtLjYwNSAxLjQ1MS0xLjUxIDAtMS4wMjktLjQyOC0xLjQ3My0xLjQ2OS0xLjQ3M2gtLjY3djIuOTgyem0tMy40NTktNS4zNmg1LjQxMmMyLjY0MiAwIDMuNjQ1IDEuNDE4IDMuNjQ1IDMuMzcxIDAgMS42ODYtLjY4NyAyLjc4Ny0yLjI2OCAzLjAxN3YuMDM2YzEuNjc0LjE0MiAyLjE3NSAxLjE1NCAyLjE3NSAyLjg0djEuMDgzYzAgLjY1NyAwIDEuNTEuMTY4IDEuNzU3LjA5My4xNDIuMTY4LjI4NC4zOTEuMzl2LjE3OGgtMy42ODNjLS4zMzUtLjY3NS0uMzM1LTEuODgtLjMzNS0yLjQxNXYtLjg1YzAtMS40MzgtLjI5OC0xLjgxMi0xLjEzNS0xLjgxMmgtLjkxMXY1LjA3N2gtMy40NTlWNjIuMDZ6TTEyMS43NjggNzQuNzMyaDMuNDU5VjYyLjA1OWgtMy40NTl2MTIuNjczek0xMzEuOTA2IDY1LjcxNXYtLjMwMmMwLS43NDYtLjMxNi0xLjM2Ny0uOTg2LTEuMzY3LS43NDQgMC0xLjA3OS41NTEtMS4wNzkgMS4xMTkgMCAyLjUwMyA1LjY1NCAxLjI3NyA1LjY1NCA1LjkxIDAgMi42OTktMS42NTUgMy45MDYtNC43MDUgMy45MDYtMi44NjQgMC00LjQ2NC0uOTQyLTQuNDY0LTMuNTY4di0uNDQ0aDMuMzQ3di4zMDJjMCAxLjA4Mi40NjUgMS40NzMgMS4xMzUgMS40NzMuNzA3IDAgMS4xMTYtLjUzMiAxLjExNi0xLjIyNSAwLTIuNTAzLTUuNDMtMS4yNi01LjQzLTUuNzUxIDAtMi41NTYgMS40MzItMy45NTcgNC4zNTEtMy45NTcgMy4wMTQgMCA0LjI5NyAxLjE4OCA0LjI5NyAzLjkwNGgtMy4yMzZ6TTEzNi43MjQgNjIuMDU5aDcuODY4djIuNjk3aC00LjQwOXYyLjE2Nmg0LjEzdjIuNTkyaC00LjEzdjIuNTJoNC41NzZ2Mi42OThoLTguMDM1VjYyLjA1OXpNMTQ5LjQ4NCA2Ny40MmguNjg4Yy45ODUgMCAxLjQ1Mi0uNjA1IDEuNDUyLTEuNTEgMC0xLjAyOS0uNDI5LTEuNDczLTEuNDcxLTEuNDczaC0uNjY5djIuOTgyem0tMy40NTktNS4zNmg1LjQxMmMyLjY0MyAwIDMuNjQ2IDEuNDE4IDMuNjQ2IDMuMzcxIDAgMS42ODYtLjY4OSAyLjc4Ny0yLjI3IDMuMDE3di4wMzZjMS42NzQuMTQyIDIuMTc2IDEuMTU0IDIuMTc2IDIuODR2MS4wODNjMCAuNjU3IDAgMS41MS4xNjggMS43NTcuMDk0LjE0Mi4xNjguMjg0LjM5MS4zOXYuMTc4aC0zLjY4NGMtLjMzNC0uNjc1LS4zMzQtMS44OC0uMzM0LTIuNDE1di0uODVjMC0xLjQzOC0uMjk4LTEuODEyLTEuMTM1LTEuODEyaC0uOTExdjUuMDc3aC0zLjQ1OVY2Mi4wNnpNMTU3LjI1OSA3NC43MzJoMy4xMjV2LTIuODA1aC0zLjEyNXYyLjgwNXptLS4wNzQtOC40MzF2LTQuMjQyaDMuMjM3djQuMjQybC0uMzkxIDQuNzU3aC0yLjQ5M2wtLjM1My00Ljc1N3oiIGNsaXAtcnVsZT0iZXZlbm9kZCIvPgo8L3N2Zz4K" alt="Harald Nyborg"></div>
+      <div class="who"><span class="name">Harald Nyborg</span><span class="badge sc-badge">Sponsoreret</span>
+        <div class="meta">Tilbudsavis · uge 34</div></div>
+      <div class="when">I dag</div>
+    </div>
+    <div class="post-body">
+      <div class="sc-copy" id="copy">
+        Skal der bores i beton? Ugens avis er landet — 56 sider med værktøj, bor, plugs og alt til
+        gør-det-selv-projektet. Bladr den igennem, inden du kører forbi.
+      </div>
+      <div class="sc-flex">
+        <div class="avis-wrap">
+          <div class="avis" id="avis" title="Se tilbudsavisen">
+            <!-- side 3 (bagerst) -->
+            <div class="avis-page pg-spread" style="z-index:1">
+              <div class="offer"><div class="ph ph3"></div><div class="t">Trådløs skruemaskine 18V</div><div class="pr">499,-<span class="was">799,-</span></div></div>
+              <div class="offer"><div class="ph ph4"></div><div class="t">Bitssæt 32 dele</div><div class="pr">69,-<span class="was">129,-</span></div></div>
+              <div class="offer"><div class="ph ph2"></div><div class="t">Arbejdslampe LED</div><div class="pr">149,-</div></div>
+              <div class="offer"><div class="ph ph1"></div><div class="t">Stige 3 trin</div><div class="pr">199,-</div></div>
+            </div>
+            <!-- side 2 -->
+            <div class="avis-page pg-spread" style="z-index:2">
+              <div class="offer"><div class="ph ph1"></div><div class="t">Slagboremaskine 750W</div><div class="pr">349,-<span class="was">599,-</span></div></div>
+              <div class="offer"><div class="ph ph2"></div><div class="t">Betonbor-sæt 5 dele</div><div class="pr">89,-<span class="was">149,-</span></div></div>
+              <div class="offer"><div class="ph ph3"></div><div class="t">Rawlplugs 100 stk.</div><div class="pr">29,-</div></div>
+              <div class="offer"><div class="ph ph4"></div><div class="t">Loftskroge 10 stk.</div><div class="pr">39,-</div></div>
+            </div>
+            <!-- forside -->
+            <div class="avis-page pg-front" style="z-index:3">
+              <div class="hn-logo"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNzEiIGhlaWdodD0iODAiIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyNzEgODAiPgogIDxwYXRoIGZpbGw9IiNGRkVEMDAiIGZpbGwtcnVsZT0iZXZlbm9kZCIgZD0iTTEzOC40MjkgMjMuMjYycy0uMzgyLS45NTMuOTUzLS45NTNoNS44MTZzMS41MjYuOTUzIDEuNTI2IDEuMzM1YzAgMCAyLjc2NC0yLjE5MyA2LjAwNS0yLjA5OCAzLjI0My4wOTYgNi4zODcgMy4zMzcgNi40ODQgOC4wMDh2MjcuNTUzcy4xOS44NTgtLjk1My44NThoLTYuMTk3cy0uNjY4LjQ3Ny0uNjY4LTEuMDQ4VjMxLjY1MnMwLTIuMTkzLTIuMzgzLTIuMTkzYy0yLjM4NSAwLTIuOTU2IDIuMTkzLTIuOTU2IDIuMTkzdjI1LjM2czAgLjk1My0xLjA0OS45NTNoLTUuODE1cy0uNzYzLjE5LS43NjMtLjk1M3YtMzMuNzV6TTE3NC41NjEgNTcuMjAycy0yLjc2NiAyLjE5NC02LjAwNiAyLjA5OWMtMy4yNDItLjA5OC02LjU3OS0yLjg2MS02LjY3NS03LjUzM1YyMy4yNjNzLS4xODktLjg2Ljk1NC0uODZoNi4xOTdzLjg1OC0uNDc1Ljg1OCAxLjA1djI1Ljc0czAgMi4xOTMgMi4zODQgMi4xOTNjMi4zODMgMCAyLjk1NS0yLjE5MyAyLjk1NS0yLjE5M1YyMy4zNThzMC0uOTU0IDEuMDQ4LS45NTRoNS44MTZzLjc2NC0uMTkuNzY0Ljk1NHYzNC4yMjZzLjQ3NiA4LjAwOC02LjM4OCAxMS4wNThjMCAwLTUuOTEyIDIuNjctMTIuMjk5LS4xOSAwIDAtLjU3MS4xOS0uNTcxLTEuMTQ2di00LjI4OHMtLjE5Mi0uOTU0Ljg1OS0uNjY4YzAgMCAxMS4xNTMgMy43MTkgMTAuMTA0LTUuMTQ4ek0xOTYuODcgNTEuMjkyYzIuMzg0IDAgMi4wOTgtMi4xIDIuMDk4LTIuMVYzMi41MXMwLTIuMjg3LTIuMDk4LTIuMjg3LTIuMzg0IDIuMjg3LTIuMzg0IDIuMjg3djE2LjU4OXMwIDIuMTkzIDIuMzg0IDIuMTkzem0tMTAuNTg0LTM5LjM3NGMtLjA5NC0xLjMzNSAxLjMzNi0xLjA1IDEuMzM2LTEuMDVoNS43MmMxLjI0IDAgMS4xNDQuODU4IDEuMTQ0Ljg1OHYxMS44MjNjMy4yNDEtMi4wOTcgNS44MTctMS44MTIgNS44MTctMS44MTIgNy4xNDkuNTcyIDYuNzY4IDguNTggNi43NjggOC41OHYyMC42ODhjLS4wOTYgNC42NzItMy4yNDIgNy45MTQtNi40ODMgOC4wMDktMy4yNC4wOTUtNi4wMDYtMi4wOTctNi4wMDYtMi4wOTcgMCAuMzc5LTEuNTI1IDEuMzM0LTEuNTI1IDEuMzM0aC01LjgxN2MtMS4zMzMgMC0uOTU0LS45NTUtLjk1NC0uOTU1VjExLjkxOHpNMjMwLjcxNiA1MC4yNDNWMzEuMjdzLS45NTQtOS43MjQtMTAuMzkzLTkuNzI0Yy05LjQzOCAwLTEwLjM5MiA5LjYzLTEwLjM5MiA5LjYzdjE5LjM1M2MuMjg3IDIuMDk4IDEuNzE3IDkuMDU2IDEwLjM5MiA5LjA1NiA5LjcyNCAwIDEwLjM5My05LjM0MiAxMC4zOTMtOS4zNDJ6bS0xMi43NzYtLjI4N3YtMTguNTlzMC0yLjAwMyAyLjM4My0yLjAwM2MyLjM4NCAwIDIuMzg0IDEuOTA3IDIuMzg0IDEuOTA3djE4LjU5MXMtLjE5MSAxLjkwNy0yLjQ3NyAxLjkwN2MtMi4yOSAwLTIuMjktMS44MTItMi4yOS0xLjgxMnpNMjQxLjU4MiAzNS4yNzV2MjEuODNzMCAuODYtMS4wNDguODZoLTYuMjkycy0uNjY3LjE5LS42NjctLjk1M3YtMzMuNzVzMC0uOTUzLjc2Mi0uOTUzaDYuNTc4cy45NTQuNTcyIDEuMzM2IDEuNDNjMCAwIDMuNDMxLTIuNTczIDYuODYyLTEuNDMgMCAwIC41NzMuMDk1LjA5Ni44NTggMCAwLTIuMzg0IDIuMjg4LTMuMjQgNi40ODMgMCAwLS4xOTIuNjY3LTEuMDUgMS4wNDkgMCAwLTMuMzM3IDEuMTQ0LTMuMzM3IDQuNTc2ek0yNTYuMjY0IDU4LjgyM2MzLjUyOSAwIDUuNjI1LTIuMDk5IDUuNjI1LTIuMDk5IDAgMy43Mi0xLjMzNCA0LjU3OC0xLjMzNCA0LjU3OC0xLjkwNyAyLjA5NS03LjM0Ljk1Mi04Ljg2NC41NzEtMS41MjktLjM4Mi0xLjE0Ny42NjYtMS4xNDcuNjY2djQuNjczYzAgMS4zMzQuNjY4IDEuMjQuNjY4IDEuMjQgNC4wOTkgMS44MTEgOS4xNTQuODU4IDkuMTU0Ljg1OCA5LjgxNy0yLjM4MyA5LjYyNy05LjM0NCA5LjYyNy05LjM0NHYtMzYuOGMwLS45NTQtLjg1OC0uODU3LS44NTgtLjg1N2gtNS4zNGMtMi4wMDEgMC0yLjAwMS42NjYtMi4wMDEuNjY2LTIuNTc1LTEuOTA2LTUuMzM4LTEuNTI1LTUuMzM4LTEuNTI1LTcuNDM3IDEuMDUtNy40MzcgOC43NzEtNy40MzcgOC43NzF2MjAuNTkzYzAgNC4xOTYgMy43MTkgOC4wMSA3LjI0NSA4LjAxem0uODU4LTkuNTgzVjMxLjYwNHMwLTIuMDAzIDIuMzg1LTIuMDAzYzIuMzgyIDAgMi4zODIgMS45MDcgMi4zODIgMS45MDd2MTcuNjM4cy0uMTg4IDEuOTA2LTIuNDc3IDEuOTA2Yy0yLjI5IDAtMi4yOS0xLjgxMi0yLjI5LTEuODEyek0xMTUuOTI5IDQ4Ljc2NVYzMi4xNzdzLS4yODYtMi4yODgtMi4zODMtMi4yODhjLTIuMDk4IDAtMi4wOTggMi4yODgtMi4wOTggMi4yODhWNDguODZzLS4yODYgMi4wOTggMi4wOTggMi4wOThjMi4zODMgMCAyLjM4My0yLjE5MyAyLjM4My0yLjE5M3ptOC4xOTgtMjUuNTV2MzMuNzQ4cy4zODIuOTU0LS45NTIuOTU0aC01LjgxNnMtMS41MjUtLjk1NC0xLjUyNS0xLjMzNmMwIDAtMi43NjYgMi4xOTQtNi4wMDcgMi4xLTMuMjQxLS4wOTUtNi4zODctMy4zMzctNi40ODItOC4wMVYyOS45ODRzLS4zODItOC4wMSA2Ljc2OC04LjU4YzAgMCAyLjU3NC0uMjg2IDUuODE2IDEuODEyVjExLjM5M3MtLjA5NS0uODU4IDEuMTQ0LS44NThoNS43MnMxLjQzMS0uMjg2IDEuMzM0IDEuMDQ5djExLjYzMnpNOTMuMTQ0IDU3LjkxN2MtMS4zMzUgMC0uOTU0LS45NTQtLjk1NC0uOTU0VjExLjU4NGMtLjA5NS0xLjMzNCAxLjMzNS0xLjA1IDEuMzM1LTEuMDVoNS43MjFjMS4yMzggMCAxLjE0NC44NiAxLjE0NC44NlY1Ny4yNXMtLjA5Ny43MTYtMS4wNDkuNzE2bC02LjE5Ny0uMDV6TTgwLjc1IDQ4Ljc2NVYzMi4xNzdzLS4yODctMi4yODgtMi4zODMtMi4yODhjLTIuMDk4IDAtMi4wOTggMi4yODgtMi4wOTggMi4yODhWNDguODZzLS4yODYgMi4wOTggMi4wOTggMi4wOThjMi4zODMgMCAyLjM4My0yLjE5MyAyLjM4My0yLjE5M3ptOC4yLTI1LjU1djMzLjc0OHMuMzguOTU0LS45NTQuOTU0SDgyLjE4cy0xLjUyNS0uOTU0LTEuNTI1LTEuMzM2YzAgMC0yLjc2NiAyLjE5NC02LjAwNyAyLjEtMy4yNC0uMDk1LTYuMzg4LTMuMzM3LTYuNDgyLTguMDFWMjkuOTg0cy0uMzgyLTguMDEgNi43NjgtOC41OGMwIDAgMi41NzQtLjI4NiA1LjgxNiAxLjgxMmwuMDk1LS4wNXMtLjA5NS0uODU2IDEuMTQ0LS44NTZoNS43MnMxLjQzLS4yODcgMS4zMzQgMS4wNDdsLS4wOTQtLjE0MXpNNDEuNDcxIDQ4Ljc2NVYzMi4xNzdzLS4yODYtMi4yODgtMi4zODMtMi4yODhjLTIuMDk4IDAtMi4wOTggMi4yODgtMi4wOTggMi4yODhWNDguODZzLS4yODYgMi4wOTggMi4wOTggMi4wOThjMi4zODMgMCAyLjM4My0yLjE5MyAyLjM4My0yLjE5M3ptOC4yLTI1LjU1djMzLjc0OHMuMzguOTU0LS45NTQuOTU0aC01LjgxNnMtMS41MjUtLjk1NC0xLjUyNS0xLjMzNmMwIDAtMi43NjYgMi4xOTQtNi4wMDcgMi4xLTMuMjQtLjA5NS02LjM4Ny0zLjMzNy02LjQ4Mi04LjAxVjI5Ljk4NHMtLjM4Mi04LjAxIDYuNzY4LTguNThjMCAwIDIuNTc0LS4yODYgNS44MTYgMS44MTJsLjA5NS0uMDVzLS4wOTUtLjg1NiAxLjE0NC0uODU2aDUuNzIxczEuNDMtLjI4NyAxLjMzNSAxLjA0N2wtLjA5Ni0uMTQxek02MC41MzkgMzQuNzk4djIyLjMwOXMwIC44NTgtLjk1NC44NThoLTYuMTAxcy0uNzYyLjA5NS0uNzYyLS43NjN2LTM0LjMyczAtLjU3My43NjItLjU3M2g2LjI5MnMuODU4LjU3MyAxLjMzNSAxLjE0NGMwIDAgMy42MjItMi4xOTMgNi40ODItMS40MyAwIDAgMS4yNC4wOTYuMzgyIDEuMjM5IDAgMC0yLjQ4IDIuMjg4LTIuODYgNi4wMDcgMCAwIC4wOTUgMS4yMzgtMi4wMDIgMS42Mi0yLjA5OC4zODEtMi41NzQgMy45MDktMi41NzQgMy45MDl6TTI2LjEyMiAzMC43OTR2MjYuMjE4cy4wOTUuOTU0LS44NTcuOTU0aC02LjEwM3MtLjY2Ny4wOTQtLjY2Ny0uODU4VjMyLjQxNXMuNTcyLTIuODYtMi4xOTMtMi45NTZjLTIuNzY0LS4wOTUtMi43NjQgMi45NTYtMi43NjQgMi45NTZ2MjQuODgycy0uMDk1LjY2OS0uNjY4LjY2OUg2LjE5N3MtLjY2Ny4wOTQtLjY2Ny0uNzY0VjIzLjQ1NHMwLTEuMDUtLjc2My0xLjQzMUwuOTU0IDIwLjExN3MtLjY2OC4xOS0uNjY4LTEuMTQ0di0yLjI4OFMwIDE1LjU0IDEuNjIgMTUuNDQ1bDEwLjk2NS0uNTcxcy45NTMtLjM4Mi45NTMuODU3djguMTk5czQuMjktMy4zMzcgNy42MjctMS42MmMzLjMzNyAxLjcxNyA0Ljk1NyAzLjI0IDQuOTU3IDguNDg0ek0xNS44MjYgMTEuNjMxcy02LjEwMiAzLjE0Ny0xMS41MzYtLjc2M2MwIDAtNC4xOTUtMy4zMzYtNC4wMDMtOS43MjMgMCAwIDAtLjc2NS43NjItLjc2NUg1LjUzczEuMDQ4LS4yODQgMS4xNDMuNzY1Yy4wOTUgMS4wNDcuNDc3IDYuOTU4IDQuMTk2IDYuODYzIDMuNzE4LS4wOTYgMy44MTMtNi44NjMgMy44MTMtNi44NjNzLS4wOTUtLjc2NS43NjItLjc2NWg0LjY3M3MuODU3LS4xODkuOTUyLjY2OWMuMDk3Ljg1OC4yODYgMy4yNDEtLjQ3NiA1LjUyOSAwIDAgMy4xNDctLjU3MiA0LjAwNC01LjUyOSAwIDAtLjI4Ni0uNjY5Ljg1OC0uNjY5aDQuNjcyczEuMDUtLjM4Ljk1Mi44NTljLS4wOTUgMS4yNC0uMjg1IDEwLjU4My0xNS4yNTMgMTAuMzkyek01LjQ4OSA3MC45NTJoNS44MDN2LTIuNjk4SDUuNDg5djIuNjk4ek0xNy4wMDMgNjQuNjVoLS4wMzhsLS45NDggNS4zOGgxLjkzNGwtLjk0OC01LjM4em0tMi4xOTUtMi41OWg0LjM1MmwzLjIzNyAxMi42NzJoLTMuNjgzbC0uMzU0LTIuMjE5aC0yLjc1MmwtLjM1NCAyLjIySDExLjU3bDMuMjM3LTEyLjY3NHpNMjIuOTc1IDYyLjA1OWgzLjQ1OXY5Ljk3Nmg0LjI2djIuNjk3aC03LjcyVjYyLjA1OXpNMzEuOTU5IDY0Ljg2M2gtMi42MDR2LTIuODA1aDguNjY4djIuODA1aC0yLjYwNXY5Ljg2OGgtMy40NTl2LTkuODY4ek0zOC42NzUgNzQuNzMyaDMuNDU5VjYyLjA1OWgtMy40NnYxMi42NzN6TTQ3LjEgNzIuMzUzaC42ODljMS4zMzkgMCAxLjUwNy0uNTMyIDEuNTA3LTMuOTU4cy0uMTY4LTMuOTU4LTEuNTA3LTMuOTU4SDQ3LjF2Ny45MTZ6bS0zLjQ1OC0xMC4yOTVoNS4wMmM0IDAgNC4yMDUgMy4wMTggNC4yMDUgNi4zMzcgMCAzLjMyLS4yMDUgNi4zMzYtNC4yMDQgNi4zMzZoLTUuMDIxVjYyLjA1OHpNNTkuMTU1IDYyLjA1OWgzLjQ1OXY5Ljk3Nmg0LjI2djIuNjk3aC03LjcyVjYyLjA1OXoiIGNsaXAtcnVsZT0iZXZlbm9kZCIvPgogIDxwYXRoIGZpbGw9IiNGRkVEMDAiIGZpbGwtcnVsZT0iZXZlbm9kZCIgZD0iTTcyLjEzOCA2NC42NUg3Mi4xbC0uOTQ3IDUuMzhoMS45MzNsLS45NDgtNS4zOHptLTIuMTk1LTIuNTloNC4zNTNsMy4yMzYgMTIuNjcySDczLjg1bC0uMzU0LTIuMjE5aC0yLjc1MmwtLjM1MyAyLjIyaC0zLjY4NGwzLjIzNy0xMi42NzR6TTc2LjM0NCA2Mi4wNTloMy42ODJsMS4zOTYgOS41NDloLjAzNmwxLjM5Ni05LjU1aDMuNjgzbC0yLjg2NCAxMi42NzRoLTQuNDY1bC0yLjg2NC0xMi42NzN6TTg3LjA5NSA2Mi4wNTloNy44Njh2Mi42OTdoLTQuNDF2Mi4xNjZoNC4xM3YyLjU5MmgtNC4xM3YyLjUyaDQuNTc3djIuNjk4aC04LjAzNVY2Mi4wNTl6TTEwNC41NjIgNjcuNTI1aC42NTJjLjg3MyAwIDEuMzM5LS40NzkgMS4zMzktMS41NDUgMC0xLjA0Ni0uNDY2LTEuNTQzLTEuMzM5LTEuNTQzaC0uNjUydjMuMDg4em0tMy40NTktNS40NjZoNS4xODljMi42NDEgMCAzLjgzMSAxLjY4NSAzLjgzMSAzLjkwNCAwIDIuNTkxLTEuNTQzIDMuOTQxLTQuMzUyIDMuOTQxaC0xLjIwOXY0LjgyOGgtMy40NTlWNjIuMDZ6TTExNC42ODEgNjcuNDJoLjY4OGMuOTg2IDAgMS40NTEtLjYwNSAxLjQ1MS0xLjUxIDAtMS4wMjktLjQyOC0xLjQ3My0xLjQ2OS0xLjQ3M2gtLjY3djIuOTgyem0tMy40NTktNS4zNmg1LjQxMmMyLjY0MiAwIDMuNjQ1IDEuNDE4IDMuNjQ1IDMuMzcxIDAgMS42ODYtLjY4NyAyLjc4Ny0yLjI2OCAzLjAxN3YuMDM2YzEuNjc0LjE0MiAyLjE3NSAxLjE1NCAyLjE3NSAyLjg0djEuMDgzYzAgLjY1NyAwIDEuNTEuMTY4IDEuNzU3LjA5My4xNDIuMTY4LjI4NC4zOTEuMzl2LjE3OGgtMy42ODNjLS4zMzUtLjY3NS0uMzM1LTEuODgtLjMzNS0yLjQxNXYtLjg1YzAtMS40MzgtLjI5OC0xLjgxMi0xLjEzNS0xLjgxMmgtLjkxMXY1LjA3N2gtMy40NTlWNjIuMDZ6TTEyMS43NjggNzQuNzMyaDMuNDU5VjYyLjA1OWgtMy40NTl2MTIuNjczek0xMzEuOTA2IDY1LjcxNXYtLjMwMmMwLS43NDYtLjMxNi0xLjM2Ny0uOTg2LTEuMzY3LS43NDQgMC0xLjA3OS41NTEtMS4wNzkgMS4xMTkgMCAyLjUwMyA1LjY1NCAxLjI3NyA1LjY1NCA1LjkxIDAgMi42OTktMS42NTUgMy45MDYtNC43MDUgMy45MDYtMi44NjQgMC00LjQ2NC0uOTQyLTQuNDY0LTMuNTY4di0uNDQ0aDMuMzQ3di4zMDJjMCAxLjA4Mi40NjUgMS40NzMgMS4xMzUgMS40NzMuNzA3IDAgMS4xMTYtLjUzMiAxLjExNi0xLjIyNSAwLTIuNTAzLTUuNDMtMS4yNi01LjQzLTUuNzUxIDAtMi41NTYgMS40MzItMy45NTcgNC4zNTEtMy45NTcgMy4wMTQgMCA0LjI5NyAxLjE4OCA0LjI5NyAzLjkwNGgtMy4yMzZ6TTEzNi43MjQgNjIuMDU5aDcuODY4djIuNjk3aC00LjQwOXYyLjE2Nmg0LjEzdjIuNTkyaC00LjEzdjIuNTJoNC41NzZ2Mi42OThoLTguMDM1VjYyLjA1OXpNMTQ5LjQ4NCA2Ny40MmguNjg4Yy45ODUgMCAxLjQ1Mi0uNjA1IDEuNDUyLTEuNTEgMC0xLjAyOS0uNDI5LTEuNDczLTEuNDcxLTEuNDczaC0uNjY5djIuOTgyem0tMy40NTktNS4zNmg1LjQxMmMyLjY0MyAwIDMuNjQ2IDEuNDE4IDMuNjQ2IDMuMzcxIDAgMS42ODYtLjY4OSAyLjc4Ny0yLjI3IDMuMDE3di4wMzZjMS42NzQuMTQyIDIuMTc2IDEuMTU0IDIuMTc2IDIuODR2MS4wODNjMCAuNjU3IDAgMS41MS4xNjggMS43NTcuMDk0LjE0Mi4xNjguMjg0LjM5MS4zOXYuMTc4aC0zLjY4NGMtLjMzNC0uNjc1LS4zMzQtMS44OC0uMzM0LTIuNDE1di0uODVjMC0xLjQzOC0uMjk4LTEuODEyLTEuMTM1LTEuODEyaC0uOTExdjUuMDc3aC0zLjQ1OVY2Mi4wNnpNMTU3LjI1OSA3NC43MzJoMy4xMjV2LTIuODA1aC0zLjEyNXYyLjgwNXptLS4wNzQtOC40MzF2LTQuMjQyaDMuMjM3djQuMjQybC0uMzkxIDQuNzU3aC0yLjQ5M2wtLjM1My00Ljc1N3oiIGNsaXAtcnVsZT0iZXZlbm9kZCIvPgo8L3N2Zz4K" alt="Harald Nyborg"></div>
+              <div class="uge">Tilbudsavis · uge 34</div>
+              <div class="splash"><div class="p">-40%</div><div class="l">VÆRKTØJ</div></div>
+              <div class="hero">Ugens store værktøjs&shy;udsalg — bor, maskiner og haveudstyr</div>
+              <div class="corner"></div>
+            </div>
+          </div>
+        </div>
+        <div class="sc-right">
+          <div id="ctxblock">
+            <div class="ctx-label">Relevant for denne tråd</div>
+            <div class="ctx-offers">
+              <div class="ctx"><div class="ct">Slagboremaskine 750W</div><div class="cp">349,-</div><div class="cl">Uge 34-avisen s. 2</div></div>
+              <div class="ctx"><div class="ct">Betonbor-sæt Ø5–10</div><div class="cp">89,-</div><div class="cl">Uge 34-avisen s. 2</div></div>
+              <div class="ctx"><div class="ct">Rawlplugs 100 stk.</div><div class="cp">29,-</div><div class="cl">Uge 34-avisen s. 3</div></div>
+            </div>
+          </div>
+          <button class="sc-cta pulse" id="cta">Se tilbudsavisen →</button>
+          <div class="sc-foot">Annonce · leveres af STEP Commerce · <a href="#">Hvorfor ser jeg denne?</a></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- ============ /WIDGET ============ -->
+
+  <!-- almindeligt forumindlæg -->
+  <div class="post">
+    <div class="post-head">
+      <div class="avatar">✳</div>
+      <div class="who"><span class="name">je_ns</span>
+        <div class="meta">💬 13112</div></div>
+      <div class="when">20-08-2026 12:44</div>
+    </div>
+    <div class="post-body">
+      Er det moderne byggeri, kan loftselementerne være i beton, og ude omkring vinduslysninger er det fibergips.
+      Sådan var det hos min datter der boede i et lejet rækkehus med førstesal.
+      <div class="sig">Vi prøver igen, i morgen --</div>
+    </div>
+  </div>
+
+  <div class="post">
+    <div class="post-head">
+      <div class="avatar">☻</div>
+      <div class="who"><span class="name">GodeVen</span>
+        <div class="meta">💬 4389 &nbsp; 💡 5220</div></div>
+      <div class="when">20-08-2026 14:46</div>
+    </div>
+    <div class="post-body">
+      Har rækkehuset første sal?<br>Hvis ikke, er der næppe beton i loftpladerne.
+    </div>
+  </div>
+</div>
+
+<!-- ===== Prototype-kontrol — kun til vores forfinelse, ikke del af widgetten ===== -->
+<div class="protobar">
+  <b>Prototype</b>
+  <label>Animation:
+    <select id="animSel">
+      <option value="flip" selected>Bladre-effekt</option>
+      <option value="pulse">Kun CTA-puls</option>
+      <option value="static">Statisk</option>
+    </select>
+  </label>
+  <label><input type="checkbox" id="ctxChk" checked> Kontekst-tilbud (fra tråd-emne)</label>
+  <label><input type="checkbox" id="copyChk" checked> Kontekstuel tekst</label>
+  <label><input type="checkbox" id="pulseChk" checked> CTA-puls</label>
+</div>
+
+<script>
+  // --- Bladre-loop: forside -> side 2 -> side 3 -> reset ---
+  const pages = Array.from(document.querySelectorAll('.avis-page')).reverse(); // [front, s2, s3]
+  let idx = 0, timer = null;
+  function flipNext() {
+    if (idx < pages.length - 1) {
+      pages[idx].classList.add('flipped');
+      idx++;
+    } else {
+      pages.forEach(p => p.classList.remove('flipped'));
+      idx = 0;
+    }
+  }
+  function startFlip() { stopFlip(); timer = setInterval(flipNext, 2600); }
+  function stopFlip()  { if (timer) clearInterval(timer); timer = null;
+                         pages.forEach(p => p.classList.remove('flipped')); idx = 0; }
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!reduced) startFlip();
+
+  // Klik på avisen = samme handling som CTA
+  const go = () => alert('→ Her åbnes tilbudsavisen (deeplink med klik-tracking via STEP Commerce)');
+  document.getElementById('avis').addEventListener('click', go);
+  document.getElementById('cta').addEventListener('click', go);
+
+  // --- Prototype-kontrol ---
+  const cta = document.getElementById('cta');
+  document.getElementById('animSel').addEventListener('change', e => {
+    const v = e.target.value;
+    if (v === 'flip' && !reduced) { startFlip(); }
+    else { stopFlip(); }
+    cta.classList.toggle('pulse', v !== 'static' && document.getElementById('pulseChk').checked);
+    if (v === 'static') document.getElementById('pulseChk').checked = false;
+  });
+  document.getElementById('pulseChk').addEventListener('change', e => cta.classList.toggle('pulse', e.target.checked));
+  document.getElementById('ctxChk').addEventListener('change', e =>
+    document.getElementById('ctxblock').style.display = e.target.checked ? '' : 'none');
+  const copies = {
+    ctx: 'Skal der bores i beton? Ugens avis er landet — 56 sider med værktøj, bor, plugs og alt til gør-det-selv-projektet. Bladr den igennem, inden du kører forbi.',
+    plain: 'Ugens tilbudsavis er landet — 56 sider med værktøj, haveudstyr og byggematerialer. Bladr den igennem her.'
+  };
+  document.getElementById('copyChk').addEventListener('change', e =>
+    document.getElementById('copy').textContent = e.target.checked ? copies.ctx : copies.plain);
+</script>
+</body>
+</html>
