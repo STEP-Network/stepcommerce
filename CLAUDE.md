@@ -63,6 +63,12 @@ Byggeorden = spec §15.
 - [x] 7. Event-ingestion + klik-redirect + rollups + dashboard
 - [x] 8. Feed health + fallback-adfærd
 - [ ] 9. Deploy (Vercel + Neon), CNAME, pilot-instans
+  - Vercel-projekt `stepcommerce` (team STEP Network) er oprettet og git-linket,
+    root directory `apps/admin`, basePath `/stepcommerce`. Public URL:
+    stepnetwork.dk/stepcommerce via rewrite i `v0-step-network-website`.
+  - DB: Neon-projekt "STEPnetwork one" (patient-mud-05351693), delt database —
+    alt ligger i Postgres-schemaet `stepcommerce` (setup-shared-db.sql → migrate).
+  - Udestår: env vars i Vercel, DB-setup kørt, rewrite i website-repoet, pilot-feed.
 
 Når du ændrer produktet væsentligt: opdatér også beslutningsloggen i
 `.claude/skills/step-commerce/references/product-summary.md`.
