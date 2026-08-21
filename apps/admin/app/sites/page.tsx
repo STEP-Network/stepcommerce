@@ -1,71 +1,72 @@
+// Sites (publisher domains). A site owns the key-values its pages can send —
+// the wizard reads that taxonomy so nobody has to remember whether the key is
+// mv_cat or mv_category.
+import Link from 'next/link';
 import { revalidatePath } from 'next/cache';
-import { query, sql } from '@/lib/db';
+import { redirectWithBasePath } from '@/lib/base-path';
+import { query } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
+
+interface KvKey { key: string; label?: string; values?: string[]; multi?: boolean }
 
 export default async function Sites() {
   async function createSite(formData: FormData) {
     'use server';
     const publisher = String(formData.get('publisher') ?? '').trim();
-    const domain = String(formData.get('domain') ?? '').trim();
+    const domain = String(formData.get('domain') ?? '').trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
     if (!publisher || !domain) return;
-    await sql`insert into site (publisher, domain) values (${publisher}, ${domain})`;
+    const rows = await query<{ id: string }>(
+      `insert into site (publisher, domain, contact) values ($1, $2, nullif($3, ''))
+       on conflict (domain) do update set publisher = excluded.publisher returning id`,
+      [publisher, domain, String(formData.get('contact') ?? '').trim()],
+    );
     revalidatePath('/sites');
+    if (rows[0]) await redirectWithBasePath(`/sites/${rows[0].id}`);
   }
 
-  async function createDict(formData: FormData) {
-    'use server';
-    const siteId = String(formData.get('site_id') ?? '');
-    const name = String(formData.get('name') ?? '').trim();
-    const bulk = String(formData.get('entries') ?? '');
-    if (!siteId || !name) return;
-    // Bulk paste: one "term<TAB or ;>segment" pair per line (spec §14: per-site
-    // ingredient/term dictionary is a first-class mapping asset).
-    const entries: Record<string, string> = {};
-    for (const line of bulk.split('\n')) {
-      const [term, segment] = line.split(/[\t;]/).map((s) => s?.trim());
-      if (term && segment) entries[term.toLowerCase()] = segment;
-    }
-    await sql`insert into kv_dictionary (site_id, name, entries) values (${siteId}, ${name}, ${JSON.stringify(entries)})`;
-    revalidatePath('/sites');
-  }
-
-  const sites = await query<{ id: string; publisher: string; domain: string }>('select id, publisher, domain from site order by publisher');
-  const dicts = await query<{ id: string; name: string; domain: string; n: string }>(
-    `select d.id, d.name, s.domain, (select count(*) from jsonb_object_keys(d.entries))::text as n
-     from kv_dictionary d join site s on s.id = d.site_id order by s.domain`,
+  const sites = await query<{
+    id: string; publisher: string; domain: string; kv_taxonomy: { keys?: KvKey[] } | null;
+    dicts: string; placements: string; widgets: string;
+  }>(
+    `select s.id, s.publisher, s.domain, s.kv_taxonomy,
+            (select count(*) from kv_dictionary d where d.site_id = s.id)::text as dicts,
+            (select count(*) from placement p where p.site_id = s.id)::text as placements,
+            (select count(*) from widget_instance w where w.site_id = s.id and w.status <> 'archived')::text as widgets
+     from site s order by s.publisher, s.domain`,
   );
 
   return (
     <>
       <h1>Sites</h1>
+      <p className="muted">Et site er et publisher-domæne plus de key-values sidens sideskabelon kan sende med. Widget-wizarden henter nøglerne herfra.</p>
+
       <table>
-        <thead><tr><th>Publisher</th><th>Domæne</th><th>ID</th></tr></thead>
-        <tbody>{sites.map((s) => <tr key={s.id}><td>{s.publisher}</td><td>{s.domain}</td><td><code>{s.id}</code></td></tr>)}</tbody>
+        <thead><tr><th>Domæne</th><th>Publisher</th><th>Keys</th><th>Ordbøger</th><th>Widgets</th><th>Placements</th></tr></thead>
+        <tbody>
+          {sites.length === 0 && <tr><td colSpan={6} className="muted">Ingen sites endnu.</td></tr>}
+          {sites.map((s) => (
+            <tr key={s.id}>
+              <td><Link href={`/sites/${s.id}`}><b>{s.domain}</b></Link></td>
+              <td>{s.publisher}</td>
+              <td>
+                {(s.kv_taxonomy?.keys ?? []).length === 0
+                  ? <span className="muted">ingen — tilføj dem</span>
+                  : <span className="chipset">{(s.kv_taxonomy!.keys ?? []).map((k) => <span className="chip" key={k.key}>{k.key}</span>)}</span>}
+              </td>
+              <td>{s.dicts}</td>
+              <td>{s.widgets}</td>
+              <td>{s.placements}</td>
+            </tr>
+          ))}
+        </tbody>
       </table>
 
       <h2>Opret site</h2>
       <form className="panel" action={createSite}>
-        <label>Publisher<input name="publisher" required /></label>
+        <label>Publisher<input name="publisher" required placeholder="Madens Verden" /></label>
         <label>Domæne<input name="domain" required placeholder="madensverden.dk" /></label>
-        <button>Opret</button>
-      </form>
-
-      <h2>Ordbøger (KV dictionary — dict-match på multi-value keys)</h2>
-      <table>
-        <thead><tr><th>Navn</th><th>Site</th><th>Termer</th><th>ID</th></tr></thead>
-        <tbody>{dicts.map((d) => <tr key={d.id}><td>{d.name}</td><td>{d.domain}</td><td>{d.n}</td><td><code>{d.id}</code></td></tr>)}</tbody>
-      </table>
-
-      <h2>Opret ordbog (bulk paste)</h2>
-      <form className="panel" action={createDict}>
-        <label>Site
-          <select name="site_id">{sites.map((s) => <option key={s.id} value={s.id}>{s.domain}</option>)}</select>
-        </label>
-        <label>Navn<input name="name" required placeholder="Ingredienser → pairing-segment" /></label>
-        <label>Term → segment (én pr. linje, adskilt med tab eller semikolon)
-          <textarea name="entries" placeholder={'skinkeschnitzler;svinekød\nskinke;svinekød\nkylling;fjerkræ'} />
-        </label>
+        <label>Kontakt<input name="contact" placeholder="navn / e-mail" /></label>
         <button>Opret</button>
       </form>
     </>

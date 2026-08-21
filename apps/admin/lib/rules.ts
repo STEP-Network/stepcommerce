@@ -104,3 +104,31 @@ export function compileRule(
   const where = compileNode(root, b);
   return { where, params: b.params };
 }
+
+/** Field list for the admin's condition builders, with Danish labels. */
+export const RULE_FIELDS: { field: string; label: string; numeric?: boolean }[] = [
+  { field: 'product_type', label: 'Kategori (product_type)' },
+  { field: 'google_product_category', label: 'Google-kategori' },
+  { field: 'brand', label: 'Brand' },
+  { field: 'title', label: 'Titel' },
+  { field: 'description', label: 'Beskrivelse' },
+  { field: 'availability', label: 'Lagerstatus' },
+  { field: 'price', label: 'Pris', numeric: true },
+  { field: 'sale_price', label: 'Tilbudspris', numeric: true },
+  { field: 'gtin', label: 'GTIN' },
+  { field: 'link', label: 'Produkt-URL' },
+  { field: 'custom_label_0', label: 'custom_label_0' },
+  { field: 'custom_label_1', label: 'custom_label_1' },
+  { field: 'custom_label_2', label: 'custom_label_2' },
+  { field: 'custom_label_3', label: 'custom_label_3' },
+  { field: 'custom_label_4', label: 'custom_label_4' },
+];
+
+export const RULE_OPERATORS: { op: string; label: string; numericOnly?: boolean }[] = [
+  { op: 'equals', label: 'er lig med' },
+  { op: 'contains', label: 'indeholder' },
+  { op: 'in', label: 'er en af (kommasepareret)' },
+  { op: 'gt', label: 'er større end', numericOnly: true },
+  { op: 'lt', label: 'er mindre end', numericOnly: true },
+  { op: 'exists', label: 'er udfyldt' },
+];

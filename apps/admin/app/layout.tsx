@@ -6,12 +6,10 @@ export const metadata = { title: 'STEP Commerce — Admin' };
 
 const NAV = [
   ['/', 'Dashboard'],
-  ['/advertisers', 'Advertisers'],
-  ['/feeds', 'Feeds'],
-  ['/templates', 'Templates'],
+  ['/widgets', 'Widgets'],
+  ['/advertisers', 'Annoncører'],
   ['/sites', 'Sites'],
-  ['/instances', 'Instances'],
-  ['/placements', 'Placements'],
+  ['/templates', 'Skabeloner'],
   ['/preview', 'Preview'],
   ['/health', 'Health'],
 ] as const;
