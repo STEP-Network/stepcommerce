@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "migrate": "node migrate.mjs",
-    "seed": "node seed.mjs"
+    "seed": "node seed.mjs",
+    "console-sql": "node build-console-sql.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.1"

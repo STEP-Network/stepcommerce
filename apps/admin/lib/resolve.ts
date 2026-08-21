@@ -28,6 +28,8 @@ interface ProductRow {
   sale_price_currency: string | null;
   brand: string | null;
   product_type: string | null;
+  custom_label_1: string | null;
+  custom_label_2: string | null;
 }
 
 export interface ResolveInput {
@@ -105,7 +107,8 @@ async function resolveProducts(source: ProductSource, feedId: string, limit: num
             and f.status = 'healthy'
             and f.last_fetch_at > now() - (f.max_age_hours || ' hours')::interval)`;
   const cols = `id, title, link, image_link, price_amount::text, price_currency,
-                sale_price_amount::text, sale_price_currency, brand, product_type`;
+                sale_price_amount::text, sale_price_currency, brand, product_type,
+                custom_label_1, custom_label_2`;
 
   if (source.kind === 'explicit' && source.product_ids?.length) {
     return query<ProductRow>(
@@ -163,6 +166,11 @@ function toServeProduct(row: ProductRow, instanceId: string, placementId: string
     const pct = Math.round((1 - Number(row.sale_price_amount) / Number(row.price_amount)) * 100);
     if (pct >= 5) badge = `-${pct}%`;
   }
+  // Feed conventions for the native templates: custom_label_1 carries the
+  // one-line "derfor" pairing explanation, custom_label_2 a 0–100 match score.
+  // Both are advertiser-controlled feed fields; templates render them only
+  // when present.
+  const score = row.custom_label_2 ? Number(row.custom_label_2) : NaN;
   return {
     id: row.id,
     title: row.title,
@@ -171,7 +179,9 @@ function toServeProduct(row: ProductRow, instanceId: string, placementId: string
     price,
     salePrice: sale,
     brand: row.brand ?? undefined,
-    subtitle: row.product_type ?? row.brand ?? undefined,
+    subtitle: row.product_type?.split('>').map((s) => s.trim()).join(' · ') ?? row.brand ?? undefined,
+    reason: row.custom_label_1 ?? undefined,
+    matchScore: Number.isFinite(score) && score >= 0 && score <= 100 ? score : undefined,
     badge,
   };
 }
