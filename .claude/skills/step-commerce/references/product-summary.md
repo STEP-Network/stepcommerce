@@ -59,6 +59,21 @@ produkter fra et feed, 100 fra et andet og 2 fra et tredje i 1 widget."
   biblioteket; "Anvend" kopierer ind i widgettens eget template. Ingen deling
   af levende rækker mellem widgets.
 
+### Wizard v2 (Ulriks anden feedback-runde, aug 2026)
+- **Annoncører vælges før produkter.** Produkt-trinnet viser kun de valgte
+  annoncørers feeds; en kilde kan ikke pege udenom valget.
+- **Produkter er valgfrie.** Manuelle produkter oprettes inline i wizarden
+  (billede-upload inkluderet), og "spring produkter over" gør widgetten til en
+  ren native annonce à la LDS-eksemplet — serveres uden produktkrav.
+- **Design er AI-first** med claude-fable-5 (prompt → tokens; URL/screenshot
+  valgfri evidens); "Manuelt design" og "Kode" er fallback-tilstande.
+- **Targeting er valgfrit.** "Ingen targeting — vis altid" = ingen regler +
+  fallback der viser puljen. Kun kombinationen ingen-regler + skjul blokeres.
+- **Rapportering** pr. annoncør / widget / site. Talt værdi regnes ALTID med
+  den enkelte annoncørs egne rater, også grupperet pr. widget/site — delte
+  widgets må aldrig gange én annoncørs klik med en andens CPC.
+- Kanonisk pricing-shape: `{"cpc":{"rate":2.5},"cpm":{"rate":25},...}`.
+
 ## Hårde læringer fra produktionsgennemgangen (aug 2026)
 Disse fejl var i koden og blev fundet ved review + test mod en kørende instans.
 De må ikke komme tilbage — der er tests for dem:

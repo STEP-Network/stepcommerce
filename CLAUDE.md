@@ -83,8 +83,11 @@ Byggeorden = spec §15.
 - [x] 8. Feed health + fallback-adfærd
 - [x] 10. Delte widgets: instance_source med conditions + loft pr. feed,
   vægtet round-robin-allokering, attribution pr. kilde (`event.source_id`).
-- [x] 11. Widget-wizard (`/widgets`): type → produkter → monetisering → design
-  (AI-styling + visuel/kode-editor + live preview) → targeting → embed/GAM.
+- [x] 11. Widget-wizard (`/widgets`), v2: type → annoncører → produkter
+  (inline manuelle produkter; kan springes over → native annonce) →
+  monetisering → design (AI-first med claude-fable-5; manuel/kode-tilstand) →
+  targeting (valgfri — "vis altid") → embed/GAM. Rapportering pr.
+  annoncør/widget/site i `/reporting`.
   Templates er gemte kopier. Annoncør-hub med logo-upload, kontakter, feeds,
   produkt-browser (søg/filter/liste/gitter) og manuelle affiliate-produkter.
   Site-taksonomi (`site.kv_taxonomy`) driver targeting-UI'et.
