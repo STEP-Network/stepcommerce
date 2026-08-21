@@ -13,29 +13,30 @@ export default function StepType({ w }: { w: Widget }) {
           <form className="panel" action={saveType} style={{ maxWidth: 'none' }}>
             <input type="hidden" name="id" value={w.id} />
             <label>Navn på widgetten<input name="name" defaultValue={w.name} required /></label>
-            <fieldset style={{ border: 0, display: 'grid', gap: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#3d3568' }}>Widget-type</span>
-              <label className="check">
+            <div className="optcards">
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-2)', textTransform: 'uppercase', letterSpacing: '.07em' }}>Widget-type</span>
+              <label className="opt">
                 <input type="radio" name="widget_type" value="product_match" defaultChecked={w.widget_type !== 'takeover'} />
                 <span>
-                  Produkt-matching
-                  <div className="muted" style={{ fontWeight: 400 }}>
-                    Produkter fra XML-feeds matches mod sidens indhold. Afregnes typisk pr. klik (CPC).
+                  Produkt-widget
+                  <div className="opt-hint">
+                    Produkter fra annoncørernes feeds (eller oprettet manuelt), matchet mod sidens indhold.
+                    Afregnes typisk pr. klik (CPC).
                   </div>
                 </span>
               </label>
-              <label className="check">
+              <label className="opt">
                 <input type="radio" name="widget_type" value="takeover" defaultChecked={w.widget_type === 'takeover'} />
                 <span>
-                  Takeover / brandflade
-                  <div className="muted" style={{ fontWeight: 400 }}>
-                    Stor brandingflade — fx Harald Nyborg-eksemplet. Feed er valgfrit; uden feed renderer den
-                    stadig, med feed kan den vise produkter oveni.
+                  Native annonce / brandflade
+                  <div className="opt-hint">
+                    Ingen produkter påkrævet — som Harald Nyborg-eksemplet på lav-det-selv.dk. Tekst, brand
+                    og CTA designes i design-trinnet; produkter kan lægges oveni senere.
                   </div>
                 </span>
               </label>
-            </fieldset>
-            <button>Gem og fortsæt →</button>
+            </div>
+            <button>Gem og fortsæt til annoncører →</button>
           </form>
         </div>
 

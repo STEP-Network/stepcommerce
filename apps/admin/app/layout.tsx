@@ -10,6 +10,7 @@ const NAV = [
   ['/advertisers', 'Annoncører'],
   ['/sites', 'Sites'],
   ['/templates', 'Skabeloner'],
+  ['/reporting', 'Rapportering'],
   ['/preview', 'Preview'],
   ['/health', 'Health'],
 ] as const;

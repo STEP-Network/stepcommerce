@@ -8,6 +8,7 @@ import { basePathUrl } from '@/lib/base-path';
 import { loadAdvertisers, loadSources, loadTargeting, loadWidget, readiness, stepBySlug, STEPS } from '@/lib/wizard';
 import type { BrowserParams } from '@/app/_components/product-browser';
 import StepType from './step-type';
+import StepAdvertisers from './step-advertisers';
 import StepSources from './step-sources';
 import StepPricing from './step-pricing';
 import StepDesign from './step-design';
@@ -62,7 +63,7 @@ export default async function WidgetWizard({
         {STEPS.map((s) => (
           <a key={s.slug} className={s.slug === step.slug ? 'on' : w.wizard_step >= s.n ? 'done' : ''}
              href={basePathUrl(`/widgets/${id}?step=${s.slug}`)}>
-            <span className="n">{s.n}</span>{s.title}
+            <span className="n"><span>{s.n}</span></span>{s.title}
           </a>
         ))}
       </nav>
@@ -71,6 +72,7 @@ export default async function WidgetWizard({
       {sp.ok && <p className="ok">{sp.ok}</p>}
 
       {step.slug === 'type' && <StepType w={w} />}
+      {step.slug === 'advertisers' && <StepAdvertisers w={w} advertisers={advertisers} />}
       {step.slug === 'sources' && <StepSources w={w} sources={sources} advertisers={advertisers} feedIssues={feedIssues} />}
       {step.slug === 'pricing' && <StepPricing w={w} advertisers={advertisers} sources={sources} />}
       {step.slug === 'design' && <StepDesign w={w} sp={sp} />}

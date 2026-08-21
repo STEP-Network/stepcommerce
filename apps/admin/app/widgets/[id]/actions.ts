@@ -59,7 +59,7 @@ export async function createWidget(fd: FormData): Promise<void> {
     [siteId, name, codeFor(name, wid), wid],
   );
   revalidatePath('/widgets');
-  await redirectWithBasePath(`/widgets/${wid}?step=sources`);
+  await redirectWithBasePath(`/widgets/${wid}?step=advertisers`);
 }
 
 // ---------------------------------------------------------------- step 1
@@ -76,10 +76,133 @@ export async function saveType(fd: FormData): Promise<void> {
     await query(`update placement set name = $2, updated_at = now() where default_instance_id = $1`, [wid, name]);
   }
   await touchStep(wid, 2);
-  await back(wid, 'sources');
+  await back(wid, 'advertisers');
 }
 
-// ---------------------------------------------------------------- step 2: sources
+// ------------------------------------------------------------ step 2: advertisers
+
+export async function addAdvertiser(fd: FormData): Promise<void> {
+  const wid = id(fd);
+  const advertiserId = id(fd, 'advertiser_id');
+  await query(
+    `insert into instance_advertiser (instance_id, advertiser_id, pricing_model, priority)
+     values ($1, $2, 'cpc', (select coalesce(max(priority), -1) + 1 from instance_advertiser where instance_id = $1))
+     on conflict (instance_id, advertiser_id) do nothing`,
+    [wid, advertiserId],
+  );
+  await syncMode(wid);
+  await touchStep(wid, 2);
+  await back(wid, 'advertisers');
+}
+
+export async function removeAdvertiser(fd: FormData): Promise<void> {
+  const wid = id(fd);
+  const advertiserId = id(fd, 'advertiser_id');
+  // Removing an advertiser takes their product sources with them — a source
+  // whose advertiser is no longer in the widget would be unattributable.
+  await query('delete from instance_source where instance_id = $1 and advertiser_id = $2', [wid, advertiserId]);
+  await query('delete from instance_advertiser where instance_id = $1 and advertiser_id = $2', [wid, advertiserId]);
+  await syncMode(wid);
+  await back(wid, 'advertisers');
+}
+
+/** exclusive/shared follows how many advertisers actually participate. */
+async function syncMode(wid: string): Promise<void> {
+  await query(
+    `update widget_instance set mode = case
+        when (select count(*) from instance_advertiser where instance_id = $1) > 1
+        then 'shared' else 'exclusive' end, updated_at = now()
+     where id = $1`,
+    [wid],
+  );
+}
+
+// ---------------------------------------------------------------- step 3: sources
+
+/** Manual products need a feed row to hang on; one per advertiser, never fetched. */
+async function manualFeedFor(advertiserId: string): Promise<string> {
+  const existing = await query<{ id: string }>(
+    `select id from feed where advertiser_id = $1 and type = 'manual' order by created_at limit 1`,
+    [advertiserId],
+  );
+  if (existing[0]) return existing[0].id;
+  const created = await query<{ id: string }>(
+    `insert into feed (advertiser_id, name, source_url, type, status)
+     values ($1, 'Manuelle produkter', 'manual://none', 'manual', 'healthy') returning id`,
+    [advertiserId],
+  );
+  return created[0].id;
+}
+
+/**
+ * Create a product by hand directly in the wizard — image upload included —
+ * and make sure the widget has a source drawing on the advertiser's manual
+ * feed, so the product lands in the pool immediately.
+ */
+export async function createManualProduct(fd: FormData): Promise<void> {
+  const wid = id(fd);
+  const advertiserId = id(fd, 'advertiser_id');
+  const title = str(fd, 'title');
+  const link = str(fd, 'link');
+  if (!title || !link) return await back(wid, 'sources', { error: 'Titel og produkt-URL skal udfyldes.' });
+
+  const chosen = await query('select 1 from instance_advertiser where instance_id = $1 and advertiser_id = $2', [wid, advertiserId]);
+  if (!chosen.length) return await back(wid, 'sources', { error: 'Annoncøren er ikke valgt på widgetten.' });
+
+  let imageUrl = str(fd, 'image_link');
+  const upload = fd.get('image');
+  if (upload instanceof File && upload.size > 0) {
+    try {
+      const assetId = await storeUpload(upload);
+      if (assetId) imageUrl = `${process.env.PUBLIC_ORIGIN ?? ''}/api/asset/${assetId}`;
+    } catch (e) {
+      return await back(wid, 'sources', { error: e instanceof Error ? e.message : 'Billedupload fejlede' });
+    }
+  }
+
+  const feedId = await manualFeedFor(advertiserId);
+  const price = str(fd, 'price').replace(',', '.');
+  await query(
+    `insert into product (feed_id, external_id, title, description, link, affiliate_url, image_link,
+                          price_amount, price_currency, availability, brand, product_type, manual, sort_order)
+     values ($1, 'manual-' || substr(gen_random_uuid()::text, 1, 13), $2, nullif($3, ''), $4, nullif($5, ''), nullif($6, ''),
+             nullif($7, '')::numeric, 'DKK', 'in stock', nullif($8, ''), nullif($9, ''), true,
+             (select coalesce(max(sort_order), 0) + 1 from product where feed_id = $1))`,
+    [
+      feedId,
+      title, str(fd, 'description'), link, str(fd, 'affiliate_url'), imageUrl,
+      /^\d+(\.\d+)?$/.test(price) ? price : '', str(fd, 'brand'), str(fd, 'product_type'),
+    ],
+  );
+  // The source is what puts the product in the widget's pool.
+  const src = await query('select 1 from instance_source where instance_id = $1 and feed_id = $2', [wid, feedId]);
+  if (!src.length) {
+    await query(
+      `insert into instance_source (instance_id, advertiser_id, feed_id, name, priority)
+       values ($1, $2, $3, 'Manuelle produkter', (select coalesce(max(priority), -1) + 1 from instance_source where instance_id = $1))`,
+      [wid, advertiserId, feedId],
+    );
+  }
+  await touchStep(wid, 3);
+  await back(wid, 'sources', { ok: `"${title}" er oprettet og lagt i puljen.` });
+}
+
+/**
+ * "No products": the widget becomes a native ad (the LDS forum-post example) —
+ * pure branding, rendered without a product pool.
+ */
+export async function skipProducts(fd: FormData): Promise<void> {
+  const wid = id(fd);
+  await query(`update widget_instance set widget_type = 'takeover', updated_at = now() where id = $1`, [wid]);
+  // The native layout is the forum-post template unless a design was already chosen.
+  const w = await loadWidget(wid);
+  if (w && w.layout_type !== 'forum_post' && w.layout_type !== 'single_card') {
+    await query(`update widget_template set layout_type = 'forum_post', updated_at = now() where id = $1`, [w.template_id]);
+  }
+  await touchStep(wid, 3);
+  await back(wid, 'pricing', { ok: 'Widgetten kører uden produkter som ren native annonce. Design den i trin 5.' });
+}
+
 
 export async function addSource(fd: FormData): Promise<void> {
   const wid = id(fd);
@@ -90,58 +213,30 @@ export async function addSource(fd: FormData): Promise<void> {
     [feedId],
   );
   const feed = feeds[0];
-  if (!feed) await back(wid, 'sources', { error: 'Feedet findes ikke.' });
+  if (!feed) return await back(wid, 'sources', { error: 'Feedet findes ikke.' });
 
-  // The advertiser comes from the feed, never from the form: a source whose
-  // advertiser does not own the feed would attribute another advertiser's
-  // clicks, and the resolver would drop it anyway.
-  await query(
-    `insert into instance_advertiser (instance_id, advertiser_id, pricing_model, priority)
-     values ($1, $2, 'cpc', (select coalesce(max(priority), -1) + 1 from instance_advertiser where instance_id = $1))
-     on conflict (instance_id, advertiser_id) do nothing`,
-    [wid, feed.advertiser_id],
-  );
+  // Advertiser-first: the feed must belong to one of the advertisers chosen in
+  // step 2. The advertiser always comes from the feed, never from the form, so
+  // attribution cannot point at anyone else.
+  const chosen = await query('select 1 from instance_advertiser where instance_id = $1 and advertiser_id = $2', [wid, feed.advertiser_id]);
+  if (!chosen.length) {
+    return await back(wid, 'sources', { error: 'Feedets annoncør er ikke valgt på widgetten — tilføj annoncøren i trin 2 først.' });
+  }
   await query(
     `insert into instance_source (instance_id, advertiser_id, feed_id, name, max_products, priority)
      values ($1, $2, $3, $4, $5, (select coalesce(max(priority), -1) + 1 from instance_source where instance_id = $1))`,
     [wid, feed.advertiser_id, feedId, str(fd, 'name') || feed.name, Number.isFinite(cap) && cap > 0 ? Math.floor(cap) : null],
   );
-  // More than one advertiser contributing means this is a shared widget.
-  await query(
-    `update widget_instance set mode = case
-        when (select count(distinct advertiser_id) from instance_source where instance_id = $1) > 1
-        then 'shared' else 'exclusive' end, updated_at = now()
-     where id = $1`,
-    [wid],
-  );
-  await touchStep(wid, 2);
+  await touchStep(wid, 3);
   await back(wid, 'sources');
 }
 
 export async function removeSource(fd: FormData): Promise<void> {
   const wid = id(fd);
   const sid = id(fd, 'source_id');
-  const rows = await query<{ advertiser_id: string }>(
-    'delete from instance_source where id = $1 and instance_id = $2 returning advertiser_id',
-    [sid, wid],
-  );
-  // Drop the advertiser from the widget when its last source goes: an
-  // advertiser row with no products would still claim branding and pricing.
-  if (rows[0]) {
-    await query(
-      `delete from instance_advertiser ia
-       where ia.instance_id = $1 and ia.advertiser_id = $2
-         and not exists (select 1 from instance_source s where s.instance_id = $1 and s.advertiser_id = $2)`,
-      [wid, rows[0].advertiser_id],
-    );
-  }
-  await query(
-    `update widget_instance set mode = case
-        when (select count(distinct advertiser_id) from instance_source where instance_id = $1) > 1
-        then 'shared' else 'exclusive' end, updated_at = now()
-     where id = $1`,
-    [wid],
-  );
+  // The advertiser stays on the widget — they were chosen explicitly in step 2;
+  // only their product contribution goes.
+  await query('delete from instance_source where id = $1 and instance_id = $2', [sid, wid]);
   await back(wid, 'sources');
 }
 
@@ -266,7 +361,7 @@ export async function savePricing(fd: FormData): Promise<void> {
      where instance_id = $1 and advertiser_id = $2`,
     [wid, advertiserId, JSON.stringify(pricing), primary, rate, Number.isFinite(weight) && weight > 0 ? Math.floor(weight) : null],
   );
-  await touchStep(wid, 3);
+  await touchStep(wid, 4);
   await back(wid, 'pricing', { ok: 'Priser gemt.' });
 }
 
@@ -367,7 +462,7 @@ export async function saveDesign(fd: FormData): Promise<void> {
   if (Object.keys(meta).length) overrides.__meta = meta;
   else delete overrides.__meta;
   await query('update widget_instance set token_overrides = $2::jsonb, updated_at = now() where id = $1', [wid, JSON.stringify(overrides)]);
-  await touchStep(wid, 4);
+  await touchStep(wid, 5);
   await back(wid, 'design', { ok: 'Design gemt.' });
 }
 
@@ -393,9 +488,12 @@ export async function saveDesignCode(fd: FormData): Promise<void> {
 export async function runAiStyle(fd: FormData): Promise<void> {
   const wid = id(fd);
   const w = await loadWidget(wid);
-  if (!w) await back(wid, 'design', { error: 'Widget ikke fundet' });
+  if (!w) return await back(wid, 'design', { error: 'Widget ikke fundet' });
+  const prompt = str(fd, 'prompt');
   const pageUrl = str(fd, 'page_url');
-  if (!pageUrl) await back(wid, 'design', { error: 'Indsæt en URL til siden.' });
+  if (!prompt && !pageUrl) {
+    return await back(wid, 'design', { error: 'Beskriv designet i prompten, eller giv en side-URL.' });
+  }
 
   let shot: { mediaType: string; base64: string } | undefined;
   const file = fd.get('screenshot');
@@ -421,7 +519,8 @@ export async function runAiStyle(fd: FormData): Promise<void> {
   let applied: string | null = null;
   try {
     const suggestion = await suggestStyle({
-      pageUrl,
+      prompt: prompt || undefined,
+      pageUrl: pageUrl || undefined,
       screenshot: shot,
       areaNote: str(fd, 'area_note'),
       widgetType: w!.widget_type,
@@ -438,7 +537,7 @@ export async function runAiStyle(fd: FormData): Promise<void> {
       `update widget_instance
        set token_overrides = jsonb_set(token_overrides, '{__ai}', $2::jsonb, true), updated_at = now()
        where id = $1`,
-      [wid, JSON.stringify({ rationale: suggestion.rationale, palette: suggestion.palette, fonts: suggestion.fonts, url: pageUrl, notes: suggestion.notes })],
+      [wid, JSON.stringify({ rationale: suggestion.rationale, palette: suggestion.palette, fonts: suggestion.fonts, url: pageUrl || null, prompt: prompt || null, notes: suggestion.notes })],
     );
     applied = 'AI-styling anvendt — se begrundelsen nedenfor.';
   } catch (e) {
@@ -542,7 +641,7 @@ export async function addTargeting(fd: FormData): Promise<void> {
              (select coalesce(max(priority), -1) + 1 from kv_mapping where instance_id = $1))`,
     [wid, pageKey, operator, operator === 'dict' ? '' : pageValue, dictId, segment, JSON.stringify(target)],
   );
-  await touchStep(wid, 5);
+  await touchStep(wid, 6);
   await back(wid, 'targeting');
 }
 
@@ -594,6 +693,19 @@ export async function pickProduct(fd: FormData): Promise<void> {
   await redirectWithBasePath(`/widgets/${wid}?step=targeting&pick=${mid}`);
 }
 
+/** "Ingen targeting": delete all rules and let the pool show on every load. */
+export async function setNoTargeting(fd: FormData): Promise<void> {
+  const wid = id(fd);
+  await query('delete from kv_mapping where instance_id = $1', [wid]);
+  await query(
+    `update widget_instance set fallback_config = '{"strategy":"default_products","target":{"kind":"all"}}'::jsonb, updated_at = now()
+     where id = $1`,
+    [wid],
+  );
+  await touchStep(wid, 6);
+  await back(wid, 'targeting', { ok: 'Ingen targeting — widgetten viser sin produktpulje ved hvert load.' });
+}
+
 export async function saveFallback(fd: FormData): Promise<void> {
   const wid = id(fd);
   const mode = str(fd, 'fallback');
@@ -635,7 +747,7 @@ export async function setStatus(fd: FormData): Promise<void> {
     }
   }
   await query('update widget_instance set status = $2, updated_at = now() where id = $1', [wid, wanted]);
-  await touchStep(wid, 6);
+  await touchStep(wid, 7);
   revalidatePath('/widgets');
   await back(wid, 'launch', { ok: wanted === 'live' ? 'Widgetten er live.' : `Status sat til ${wanted}.` });
 }

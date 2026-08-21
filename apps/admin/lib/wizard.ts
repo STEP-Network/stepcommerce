@@ -9,11 +9,12 @@ import { placementCode } from './snippet';
 
 export const STEPS = [
   { n: 1, slug: 'type', title: 'Type & site' },
-  { n: 2, slug: 'sources', title: 'Produkter' },
-  { n: 3, slug: 'pricing', title: 'Monetisering' },
-  { n: 4, slug: 'design', title: 'Design' },
-  { n: 5, slug: 'targeting', title: 'Targeting' },
-  { n: 6, slug: 'launch', title: 'Embed & live' },
+  { n: 2, slug: 'advertisers', title: 'Annoncører' },
+  { n: 3, slug: 'sources', title: 'Produkter' },
+  { n: 4, slug: 'pricing', title: 'Monetisering' },
+  { n: 5, slug: 'design', title: 'Design' },
+  { n: 6, slug: 'targeting', title: 'Targeting' },
+  { n: 7, slug: 'launch', title: 'Embed & live' },
 ] as const;
 
 export type StepSlug = (typeof STEPS)[number]['slug'];
@@ -206,9 +207,12 @@ export function readiness(
   if (advertisers.length && priced.length < advertisers.length) {
     b.push({ text: 'Mindst én annoncør mangler prissætning.', step: 'pricing', hard: false });
   }
+  // "Ingen targeting" is a legitimate choice: the widget then shows its pool on
+  // every load. What is NOT allowed is the ambiguous middle — no rules AND a
+  // fallback that hides — because that widget can never render anything.
   const hasDefault = w.fallback_config?.strategy === 'default_products' || w.fallback_config?.unmapped === true;
   if (!takeover && !targeting.length && !hasDefault) {
-    b.push({ text: 'Ingen targeting-regler og intet eksplicit default-sæt — widgetten vil aldrig rendere.', step: 'targeting', hard: true });
+    b.push({ text: 'Ingen targeting-regler og fallback står på "vis ikke noget" — widgetten vil aldrig rendere. Vælg "Ingen targeting (vis altid)" eller tilføj en regel.', step: 'targeting', hard: true });
   }
   for (const t of targeting) {
     if (t.target?.kind === 'explicit' && !(t.target.product_ids ?? []).length) {
@@ -265,7 +269,8 @@ export const META_FIELDS = [
   { key: 'matchLine', label: 'Match-linje (vises kun ved kontekst-match)', placeholder: 'Passer til opskriftens ingredienser' },
   { key: 'ctaLabel', label: 'CTA-tekst', placeholder: 'Se vinen' },
   { key: 'catalogTitle', label: 'Katalog-titel', placeholder: 'Ugens tilbud' },
-  { key: 'heroText', label: 'Hero-tekst (takeover)', placeholder: 'Alt til haven — nu 30 %' },
+  { key: 'heroText', label: 'Hero-tekst (native/takeover)', placeholder: 'Alt til haven — nu 30 %' },
+  { key: 'ctaUrl', label: 'CTA-link (native uden produkter)', placeholder: 'https://annoncoer.dk/kampagne' },
   { key: 'whyLabel', label: '"Derfor"-label', placeholder: 'Derfor' },
   { key: 'bestMatchLabel', label: 'Bedste match-label', placeholder: 'Bedste match' },
 ] as const;

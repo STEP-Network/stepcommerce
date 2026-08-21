@@ -10,7 +10,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { validateFeedUrl } from './feed';
 import type { DesignTokens } from './serve-types';
 
-const MODEL = 'claude-opus-5';
+const MODEL = 'claude-fable-5';
 const FETCH_TIMEOUT_MS = 15_000;
 const MAX_CSS_CHARS = 60_000;
 
@@ -145,8 +145,9 @@ export async function fetchPageStyles(pageUrl: string): Promise<{ css: string; t
 }
 
 const SYSTEM = `Du er senior UI-designer på STEP Commerce, en dansk platform for kontekstuelle commerce-widgets.
-Din opgave: foreslå design-tokens så en produkt-widget ser ud som en naturlig del af den side og det område,
-brugeren peger på — ikke som en bannerannonce.
+Din opgave: omsæt brugerens beskrivelse (og evt. sidens CSS og et screenshot) til design-tokens, så widgetten
+ser ud som en naturlig del af siden — ikke som en bannerannonce. Brugerens prompt er den primære instruktion;
+CSS og screenshot er evidens du bruger til at ramme sidens faktiske udtryk.
 
 Regler:
 - Tokens skal være konkrete CSS-værdier (hex til farver, komplette font-stacks med fallback, px/rem til mål).
@@ -160,7 +161,9 @@ Regler:
 - rationale: 2-4 sætninger på dansk om hvad du læste af siden, og hvorfor tokens ser ud som de gør.`;
 
 export async function suggestStyle(input: {
-  pageUrl: string;
+  /** The user's free-text design brief — the primary instruction. */
+  prompt?: string;
+  pageUrl?: string;
   screenshot?: { mediaType: string; base64: string };
   areaNote?: string;
   widgetType: string;
@@ -168,7 +171,15 @@ export async function suggestStyle(input: {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY er ikke sat — AI-styling er ikke tilgængelig i dette miljø.');
   }
-  const { css, title, notes } = await fetchPageStyles(input.pageUrl);
+  if (!input.prompt && !input.pageUrl && !input.screenshot) {
+    throw new Error('Skriv en design-prompt, eller giv en side-URL eller et screenshot.');
+  }
+  let css = '';
+  let title = '';
+  let notes: string[] = [];
+  if (input.pageUrl) {
+    ({ css, title, notes } = await fetchPageStyles(input.pageUrl));
+  }
 
   const content: Anthropic.ContentBlockParam[] = [];
   if (input.screenshot) {
@@ -185,20 +196,18 @@ export async function suggestStyle(input: {
       text: 'Screenshottet ovenfor viser siden. Widgetten skal ligge i det område brugeren beskriver nedenfor.',
     });
   }
-  content.push({
-    type: 'text',
-    text: [
-      `Side: ${input.pageUrl}`,
-      `Sidetitel: ${title}`,
-      `Widget-type: ${input.widgetType === 'takeover' ? 'takeover/brandflade' : 'produkt-matching (feed-drevet)'}`,
-      input.areaNote ? `Placering ifølge brugeren: ${input.areaNote}` : 'Placering: ikke angivet — antag hovedspalten.',
-      '',
-      'Sidens CSS (uddrag med farve-, font- og form-deklarationer):',
-      '```css',
-      css || '/* ingen CSS tilgængelig */',
-      '```',
-    ].join('\n'),
-  });
+  const lines = [
+    `Widget-type: ${input.widgetType === 'takeover' ? 'native annonce/brandflade (evt. uden produkter)' : 'produkt-matching (feed-drevet)'}`,
+  ];
+  if (input.prompt) lines.push('', `Brugerens design-brief:`, input.prompt);
+  if (input.pageUrl) {
+    lines.push('', `Side: ${input.pageUrl}`, `Sidetitel: ${title}`);
+    lines.push(input.areaNote ? `Placering ifølge brugeren: ${input.areaNote}` : 'Placering: ikke angivet — antag hovedspalten.');
+    lines.push('', 'Sidens CSS (uddrag med farve-, font- og form-deklarationer):', '```css', css || '/* ingen CSS tilgængelig */', '```');
+  } else if (input.areaNote) {
+    lines.push(`Placering ifølge brugeren: ${input.areaNote}`);
+  }
+  content.push({ type: 'text', text: lines.join('\n') });
 
   const client = new Anthropic();
   const message = await client.messages.create({

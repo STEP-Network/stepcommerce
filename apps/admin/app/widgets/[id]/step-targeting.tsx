@@ -6,7 +6,7 @@ import { query } from '@/lib/db';
 import { RULE_FIELDS, RULE_OPERATORS } from '@/lib/rules';
 import type { SourceSummary, TargetingRule, Widget } from '@/lib/wizard';
 import ProductBrowser, { type BrowserParams } from '@/app/_components/product-browser';
-import { addTargeting, moveTargeting, pickProduct, removeTargeting, saveFallback } from './actions';
+import { addTargeting, moveTargeting, pickProduct, removeTargeting, saveFallback, setNoTargeting } from './actions';
 
 function describeTarget(t: TargetingRule['target'], ruleNames: Map<string, string>): string {
   switch (t?.kind) {
@@ -62,12 +62,30 @@ export default async function StepTargeting({
     ? ((w.fallback_config.target as { kind?: string })?.kind === 'rule' ? 'rule' : 'all')
     : 'hide';
 
+  const alwaysOn = targeting.length === 0 && fallback === 'all';
+
   return (
     <>
+      <div className="card" style={{ display: 'flex', gap: 16, justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
+        <div>
+          <b>Targeting er valgfrit.</b>
+          <div className="muted">
+            Uden regler loader widgetten ved hvert sidevisning og viser sin produktpulje. Regler er til når
+            den kun skal vise sig (eller vise bestemte produkter) i bestemte kontekster.
+          </div>
+        </div>
+        {alwaysOn ? (
+          <span className="status live">Ingen targeting — vises altid</span>
+        ) : (
+          <form action={setNoTargeting}>
+            <input type="hidden" name="id" value={w.id} />
+            <button className="ghost">Ingen targeting — vis altid</button>
+          </form>
+        )}
+      </div>
       <p className="hint">
         Reglerne læses ovenfra og ned, og den <b>første</b> der matcher bestemmer. Matcher ingen regel, falder
-        widgetten tilbage på indstillingen nederst — som standard viser den ikke noget, netop fordi en
-        halvfærdig widget aldrig må ende med at vise hele kataloget.
+        widgetten tilbage på indstillingen nederst.
       </p>
       {keys.length === 0 && (
         <p className="warn">
