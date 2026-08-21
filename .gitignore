@@ -9,3 +9,4 @@ next-env.d.ts
 *.tsbuildinfo
 apps/admin/public/w.js
 apps/admin/test/dist/
+apps/admin/test/dist/
