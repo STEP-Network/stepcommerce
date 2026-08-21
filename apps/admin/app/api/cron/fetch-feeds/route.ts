@@ -20,7 +20,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const feeds = await query<FeedRow & { name: string }>(
     `select id, name, source_url, type, field_mapping, last_fetch_hash, max_age_hours, item_element
      from feed
-     where source_url not like '%example.invalid%'`,
+     where type <> 'manual'
+       and source_url not like '%example.invalid%'`,
   );
   const results: Record<string, unknown> = {};
   for (const feed of feeds) {

@@ -32,7 +32,7 @@ export interface CanonicalProduct {
 export interface FeedRow {
   id: string;
   source_url: string;
-  type: 'google_shopping_xml' | 'generic_xml' | 'csv';
+  type: 'google_shopping_xml' | 'generic_xml' | 'csv' | 'manual';
   field_mapping: Record<string, string> | null;
   last_fetch_hash: string | null;
   max_age_hours: number;
@@ -330,6 +330,12 @@ export async function fetchFeed(feed: FeedRow): Promise<FetchResult> {
   );
   const previous = Number(prev_count);
 
+  // Manual feeds have no source: fetching one can only mark it failing and
+  // block a widget whose hand-curated products are perfectly fine.
+  if (feed.type === 'manual') {
+    return { ok: true, status: 'healthy', count: 0, dropped: 0 };
+  }
+
   const urlCheck = validateFeedUrl(feed.source_url);
   if (!urlCheck.ok) return fail(urlCheck.reason);
 
@@ -424,6 +430,7 @@ export async function sweepStaleFeeds(): Promise<number> {
   const rows = await query(
     `update feed set status = 'stale', updated_at = now()
      where status = 'healthy'
+       and type <> 'manual'  -- manual feeds have no source to be stale against
        and (last_fetch_at is null
             or last_fetch_at < now() - (max_age_hours || ' hours')::interval
             or coalesce(content_changed_at, last_fetch_at) < now() - (max_age_hours || ' hours')::interval)
