@@ -3,8 +3,10 @@
 // has its own CRON_SECRET check. STEP SSO replaces this before broad rollout.
 import { NextRequest, NextResponse } from 'next/server';
 
+// api/demo-feed is public: it is consumed as a feed source by the fetcher
+// itself (and contains only synthetic demo products).
 export const config = {
-  matcher: ['/((?!api/serve|api/events|api/cron|c/|w\\.js|_next|favicon).*)'],
+  matcher: ['/((?!api/serve|api/events|api/cron|api/demo-feed|c/|w\\.js|_next|favicon).*)'],
 };
 
 export function middleware(req: NextRequest): NextResponse {

@@ -40,11 +40,24 @@ Appen kører med `basePath: '/stepcommerce'` og eksponeres på
 projekts deployment. Vercel-projekt: `stepcommerce` (root directory
 `apps/admin`, monorepo-install fra repo-roden).
 
-Databasen deles med STEP Networks øvrige apps (Neon-projekt "STEPnetwork one");
-alle tabeller ligger i det dedikerede Postgres-schema **`stepcommerce`** —
-kør `packages/db/setup-shared-db.sql` som DB-owner én gang (opretter schema +
-app-rollen `stepcommerce_app` med `search_path = stepcommerce`), og derefter
-`npm run migrate -w @stepcommerce/db` med app-rollens connection string.
+Databasen deles med STEP Networks øvrige apps (Neon-projekt "STEPnetwork one",
+database `neondb`); alle tabeller ligger i det dedikerede Postgres-schema
+**`stepcommerce`** — `public` røres aldrig. Schema, app-rolle
+(`stepcommerce_app`, `search_path = stepcommerce`) og pilot-seed er **allerede
+kørt** i produktion.
+
+Skal det sættes op forfra (nyt miljø eller ny database):
+
+```bash
+# A) programmatisk — kræver DB-owner-adgang
+psql "$OWNER_URL" -f packages/db/setup-shared-db.sql   # schema + app-rolle
+DATABASE_URL=<app-rollens url> npm run migrate -w @stepcommerce/db
+DATABASE_URL=<app-rollens url> npm run seed -w @stepcommerce/db
+
+# B) kun web-konsol til rådighed (fx Neon SQL Editor)
+npm run console-sql -w @stepcommerce/db   # regenererer console-setup.sql
+# → indsæt packages/db/console-setup.sql, udskift __CHANGE_ME__, kør én gang
+```
 
 ## Miljøvariabler (apps/admin)
 

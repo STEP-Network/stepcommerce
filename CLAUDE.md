@@ -62,13 +62,23 @@ Byggeorden = spec §15.
 - [x] 6. Embed-loader + GAM-kreativ-wrapper (snippet generator)
 - [x] 7. Event-ingestion + klik-redirect + rollups + dashboard
 - [x] 8. Feed health + fallback-adfærd
-- [ ] 9. Deploy (Vercel + Neon), CNAME, pilot-instans
-  - Vercel-projekt `stepcommerce` (team STEP Network) er oprettet og git-linket,
-    root directory `apps/admin`, basePath `/stepcommerce`. Public URL:
-    stepnetwork.dk/stepcommerce via rewrite i `v0-step-network-website`.
-  - DB: Neon-projekt "STEPnetwork one" (patient-mud-05351693), delt database —
-    alt ligger i Postgres-schemaet `stepcommerce` (setup-shared-db.sql → migrate).
-  - Udestår: env vars i Vercel, DB-setup kørt, rewrite i website-repoet, pilot-feed.
+- [~] 9. Deploy (Vercel + Neon), CNAME, pilot-instans
+  - **Vercel:** projekt `stepcommerce` (team STEP Network) er oprettet, git-linket
+    til repoet, root directory `apps/admin`, basePath `/stepcommerce`, builds
+    grønne, deployment protection slået fra.
+  - **DB (klar):** Neon-projekt "STEPnetwork one" (patient-mud-05351693),
+    database `neondb`, delt med website-appen. Alt STEP Commerce ligger i
+    Postgres-schemaet `stepcommerce` (14 tabeller) — `public` er urørt.
+    App-rolle `stepcommerce_app` med `search_path = stepcommerce`.
+    Host: `ep-blue-boat-agw15yx3.c-2.eu-central-1.aws.neon.tech`.
+    Pilot-seed kørt: placement `PLC_mv_recipe`, live instans, 5 pairing-regler
+    + dict-mappings på `mv_ingredients`, demo-feed (`/api/demo-feed`).
+  - **Rewrite:** branch `stepcommerce-rewrite` i `step-network-website` tilføjer
+    proxy `/stepcommerce/*` → stepcommerce.vercel.app. Ikke merget endnu.
+  - Udestår (kræver dashboard-adgang): env vars i Vercel (`DATABASE_URL`,
+    `ADMIN_USER`, `ADMIN_PASSWORD`, `CRON_SECRET`), production branch =
+    `stepcommerce`, merge af rewrite-branchen — og til sidst: skift demo-feed
+    ud med annoncørens rigtige feed (pilot).
 
 Når du ændrer produktet væsentligt: opdatér også beslutningsloggen i
 `.claude/skills/step-commerce/references/product-summary.md`.
