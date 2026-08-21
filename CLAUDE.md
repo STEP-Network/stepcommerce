@@ -26,6 +26,16 @@ CPC **tælles og rapporteres** i V1 (rate card til V2), men faktureres ikke.
 6. 100 % kontekstuelt: ingen cookies/user-IDs/TCF-gate. `limited_ads`
    respekteres som serve-signal.
 7. Produktionsassets kommer fra annoncørens feed/aftale — aldrig scraped.
+8. **Ordbogsmatch er ord-ankret**, aldrig fri substring: "and" må ikke matche
+   "vand". Termer på ≤3 tegn matcher kun som helt ord. Chips må kun vise termer
+   fra det segment der faktisk blev valgt.
+9. **En instans må ikke serveres uden mapping-match** medmindre der er et
+   eksplicit default-sæt. Widgetten må aldrig hævde et kontekst-match den ikke
+   har lavet (matchLine/chips skjules).
+10. **ANNONCE-mærkningen er hard-coded** (størrelse/vægt/opacity) — ingen
+    annoncør-token må kunne gøre den usynlig (markedsføringsloven).
+11. Fail closed: manglende `ADMIN_USER`/`ADMIN_PASSWORD`/`CRON_SECRET` i
+    produktion lukker adgangen, den åbner den ikke.
 
 ## Struktur
 
@@ -40,11 +50,17 @@ apps/admin         ← Next.js 15: admin-UI + /api/serve + /c/{click_id} + cron
 ```
 npm install                 # workspaces
 npm run typecheck           # alle pakker
+npm test                    # unit-tests (rules, ordbog, prisparsing, XML)
 npm run widget:build        # esbuild-bundle + gzip-størrelsestjek
 npm run widget:playground   # åbn packages/widget/playground/index.html via server
 npm run admin:dev           # Next.js dev (kræver DATABASE_URL)
 npm run admin:build
+npm run migrate -w @stepcommerce/db   # baseline + pending migrations
 ```
+
+**Lokal udvikling uden Neon:** kør en almindelig Postgres og sæt `LOCAL_PG=1`
+sammen med `DATABASE_URL=postgresql://...` — så byttes Neons HTTP-driver ud med
+en `pg`-shim (kun dev, se `apps/admin/lib/dev-pg-driver.mjs`).
 
 Widget-playground kører uden database (mock-payloads i `playground/mocks/`).
 Admin/API kræver Neon Postgres: sæt `DATABASE_URL`, kør
@@ -68,17 +84,28 @@ Byggeorden = spec §15.
     grønne, deployment protection slået fra.
   - **DB (klar):** Neon-projekt "STEPnetwork one" (patient-mud-05351693),
     database `neondb`, delt med website-appen. Alt STEP Commerce ligger i
-    Postgres-schemaet `stepcommerce` (14 tabeller) — `public` er urørt.
+    Postgres-schemaet `stepcommerce` (17 tabeller) — `public` er urørt.
     App-rolle `stepcommerce_app` med `search_path = stepcommerce`.
     Host: `ep-blue-boat-agw15yx3.c-2.eu-central-1.aws.neon.tech`.
-    Pilot-seed kørt: placement `PLC_mv_recipe`, live instans, 5 pairing-regler
+    Pilot-seed kørt: placement `PLC_mv_recipe`, draft-instans, 5 pairing-regler
     + dict-mappings på `mv_ingredients`, demo-feed (`/api/demo-feed`).
   - **Rewrite:** branch `stepcommerce-rewrite` i `step-network-website` tilføjer
     proxy `/stepcommerce/*` → stepcommerce.vercel.app. Ikke merget endnu.
+  - Migrations kørt i produktion (schema_migration v1 + v2). Pilot-instansen står
+    på **draft** (demo-feed må ikke ramme en publisher-side).
   - Udestår (kræver dashboard-adgang): env vars i Vercel (`DATABASE_URL`,
-    `ADMIN_USER`, `ADMIN_PASSWORD`, `CRON_SECRET`), production branch =
-    `stepcommerce`, merge af rewrite-branchen — og til sidst: skift demo-feed
-    ud med annoncørens rigtige feed (pilot).
+    `PUBLIC_ORIGIN`, `ADMIN_USER`, `ADMIN_PASSWORD`, `CRON_SECRET`),
+    production branch = `stepcommerce`, merge af rewrite-branchen — og til
+    sidst: skift demo-feed ud med annoncørens rigtige feed, tjek i `/preview`,
+    og sæt instansen live.
+
+## Operabilitet
+
+- `/preview` — renderer et rigtigt placement med rigtige feed-data gennem den
+  rigtige runtime (også draft-instanser). **Brug den før noget sættes live.**
+- `/health` — serve-beslutninger pr. placement med årsagskoder (hvorfor
+  renderede den ikke?) + feed-uptime og "indhold ændret". Widgetten fejler
+  tavst by design, så dette er det eneste sted man kan se det.
 
 Når du ændrer produktet væsentligt: opdatér også beslutningsloggen i
 `.claude/skills/step-commerce/references/product-summary.md`.

@@ -22,6 +22,31 @@ En platform hvor STEP indlæser annoncørers produktfeeds, bygger frit stylede r
 - **Template A "Native forum post"** (lav-det-selv.dk × Harald Nyborg): widget som forumindlæg — advertiser-logo som avatar, "Sponsoreret"-badge der spejler forumets badges, diskret ANNONCE-mærkning, konversationel copy i forum-tone, bladrende tilbudsavis (auto-flip ~2,6 s + "peelende" hjørne), kontekst-stribe "Relevant for denne tråd", puls-CTA. HN's rigtige farver: navy #10357F, blå #0097D6, gul #FFED00, rød #E40712 KUN til priser.
 - **Template B "Native recipe section"** (madensverden.dk): widget som en af sitets egne sektioner (ikon + serif-overskrift + hairline + chevron), match-linje med ingrediens-chips, tre produktkort med match-score-bar (animeres ved viewability), "derfor"-forklaring pr. produkt, "Bedste match"-badge, advertiser-attribution i footer.
 
+## Hårde læringer fra produktionsgennemgangen (aug 2026)
+Disse fejl var i koden og blev fundet ved review + test mod en kørende instans.
+De må ikke komme tilbage — der er tests for dem:
+- **Ordbogsmatch skal være ord-ankret.** Fri substring-match betød at "and"
+  (fugl) matchede "vand", "koriander" og "mandler" — en laks-opskrift fik en
+  fjerkræ-rødvin med chippen "and". Termer ≤3 tegn matcher kun som helt ord.
+- **Chips må kun vise det valgte segments termer**, ellers hævder widgetten et
+  match på en ingrediens den ikke matchede på.
+- **GAM-kreativen skal have BÅDE Level-A- og Level-B-nøgler.** Uden
+  mapping-nøglerne resolver den instansen og finder så ingen produkter → pilotten
+  var sort på den primære leveringsvej.
+- **En instans uden mapping-match må ikke serveres** (medmindre eksplicit
+  default-sæt). Ellers serveres hele kataloget på hver side.
+- **ANNONCE-mærkning må ikke være token-styret** — en annoncørfarve kunne gøre
+  den usynlig (markedsføringsloven).
+- **Danske priser:** "1.289 DKK" må ikke blive 1,29. Og `g:shipping/g:price` må
+  ikke blive produktprisen.
+- **last_fetch_hash skal sammenlignes** — et frosset feed bag et CDN fetcher
+  grønt for evigt og renderer måneder gamle priser.
+- **Klik skal bære device_class**, ellers lander de i en anden stats-række end
+  visningerne og CTR pr. række er altid 0.
+- **Fail closed:** manglende auth-env-vars skal lukke adgangen, ikke åbne den.
+- **Ranking efter match-score, ikke pris** — "Bedste match" blev ellers valgt
+  blandt de tre billigste.
+
 ## Nøglebeslutninger (fra udviklingsforløbet)
 1. Template + instans-model: instans = template + site + mappings + overrides; restyle template → alle instanser opdateres.
 2. GAM-levering er first-class: kreativ får KVs via `%%PATTERN:key%%`-makroer — læs ALDRIG googletag fra SafeFrame. Direkte script-tag læser googletag → dataLayer → data-kv.
@@ -36,4 +61,4 @@ En platform hvor STEP indlæser annoncørers produktfeeds, bygger frit stylede r
 11. Pilot: madensverden.dk-typen, vin × opskrifter. Succeskrav: widget-RPM ≥ 2× display-RPM på samme slot inden 8 uger; ellers kill/rework (besluttet på forhånd). Media Summit '27 (28/1) er offentlig deadline/launch-scene.
 
 ## Repo-status
-**Kanonisk hjem er nu GitHub: `STEP-Network/stepcommerce`** (zip-round-trips er udfaset — tidligere zip-arbejde blev ikke migreret; repoet er genopbygget fra spec i aug 2026). Struktur: `packages/widget` (vanilla TS-runtime m. begge templates, ~7,4 KB gzip, playground m. mocks + screenshots-verificeret), `packages/db` (schema.sql valideret mod Postgres 16 + migrate/seed), `apps/admin` (Next.js 15: admin-UI, `/api/serve` m. fuld resolver (placement-regler, eq/contains/dict-mapping, fallback-kæde, limited_ads, stale-feed-guard), `/api/events`, `/c/{product_id}`-klik-redirect, feed-fetcher (streaming SAX, upsert, health), rules engine (SQL-kompileret, felt-whitelisted), cron fetch+rollup, dashboard), `CLAUDE.md` (status-tjekliste — opdatér hver session). Færdigt: spec §15 trin 1–8, samt trin 9's infrastruktur: Vercel-projekt `stepcommerce` (basePath `/stepcommerce`, grønne builds) og Neon-database provisioneret (projekt "STEPnetwork one", database `neondb`, isoleret Postgres-schema `stepcommerce` m. 14 tabeller + app-rolle `stepcommerce_app`; `public` urørt) med pilot-seed kørt (placement `PLC_mv_recipe`, live instans, 5 pairing-regler + ordbogs-mappings, indbygget demo-feed på `/api/demo-feed` så hele kæden kan demoes uden annoncørfeed). Udestår: env vars i Vercel, merge af rewrite-branchen `stepcommerce-rewrite` i website-repoet (giver stepnetwork.dk/stepcommerce), og udskiftning af demo-feed med annoncørens rigtige feed. Skillen ligger også i repoet under `.claude/skills/step-commerce/` — hold begge kopier synkrone.
+**Kanonisk hjem er nu GitHub: `STEP-Network/stepcommerce`** (zip-round-trips er udfaset — tidligere zip-arbejde blev ikke migreret; repoet er genopbygget fra spec i aug 2026). Struktur: `packages/widget` (vanilla TS-runtime m. begge templates, ~7,4 KB gzip, playground m. mocks + screenshots-verificeret), `packages/db` (schema.sql valideret mod Postgres 16 + migrate/seed), `apps/admin` (Next.js 15: admin-UI, `/api/serve` m. fuld resolver (placement-regler, eq/contains/dict-mapping, fallback-kæde, limited_ads, stale-feed-guard), `/api/events`, `/c/{product_id}`-klik-redirect, feed-fetcher (streaming SAX, upsert, health), rules engine (SQL-kompileret, felt-whitelisted), cron fetch+rollup, dashboard), `CLAUDE.md` (status-tjekliste — opdatér hver session). Færdigt: spec §15 trin 1–8, samt trin 9's infrastruktur: Vercel-projekt `stepcommerce` (basePath `/stepcommerce`, grønne builds) og Neon-database provisioneret (projekt "STEPnetwork one", database `neondb`, isoleret Postgres-schema `stepcommerce` m. 14 tabeller + app-rolle `stepcommerce_app`; `public` urørt) med pilot-seed kørt (placement `PLC_mv_recipe`, live instans, 5 pairing-regler + ordbogs-mappings, indbygget demo-feed på `/api/demo-feed` så hele kæden kan demoes uden annoncørfeed). Efter produktionsgennemgangen (fuld code review + PO/UX-review mod en kørende instans) er der desuden: `/preview` (render et rigtigt placement med rigtige feed-data før live), `/health` (serve-årsagskoder + feed-uptime), forward-migrations, guardrails mod at sætte en halvkonfigureret instans live, og 25 unit-tests. Pilot-instansen står på **draft** indtil et rigtigt annoncørfeed er koblet på. Udestår: env vars i Vercel, merge af rewrite-branchen `stepcommerce-rewrite` i website-repoet (giver stepnetwork.dk/stepcommerce), og udskiftning af demo-feed med annoncørens rigtige feed. Skillen ligger også i repoet under `.claude/skills/step-commerce/` — hold begge kopier synkrone.
