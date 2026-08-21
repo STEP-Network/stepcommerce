@@ -34,8 +34,11 @@ class SqlBuilder {
   clauses: string[] = [];
   params: unknown[] = [];
   private offset: number;
-  constructor(paramOffset: number) {
+  /** Prefix for column references, e.g. "p." when the query aliases product. */
+  readonly prefix: string;
+  constructor(paramOffset: number, prefix = '') {
     this.offset = paramOffset;
+    this.prefix = prefix;
   }
   bind(value: unknown): string {
     this.params.push(value);
@@ -58,7 +61,7 @@ function compileNode(node: RuleNode, b: SqlBuilder): string {
   const leaf = node as RuleLeaf;
   const field = FIELDS[leaf.field];
   if (!field) throw new Error(`Unknown rule field: ${leaf.field}`);
-  const col = field.column;
+  const col = b.prefix + field.column;
   switch (leaf.operator) {
     case 'equals':
       return `${col} = ${b.bind(String(leaf.value))}${field.numeric ? '::numeric' : ''}`;
@@ -86,9 +89,17 @@ function compileNode(node: RuleNode, b: SqlBuilder): string {
   }
 }
 
-/** Compiles conditions to {where, params}. Param placeholders start at $<paramOffset+1>. */
-export function compileRule(conditions: RuleConditions, paramOffset = 0): { where: string; params: unknown[] } {
-  const b = new SqlBuilder(paramOffset);
+/**
+ * Compiles conditions to {where, params}. Param placeholders start at
+ * $<paramOffset+1>. `columnPrefix` qualifies column names for queries that
+ * alias the product table (e.g. "p.").
+ */
+export function compileRule(
+  conditions: RuleConditions,
+  paramOffset = 0,
+  columnPrefix = '',
+): { where: string; params: unknown[] } {
+  const b = new SqlBuilder(paramOffset, columnPrefix);
   const root: RuleNode = Array.isArray(conditions) ? { all: conditions } : conditions;
   const where = compileNode(root, b);
   return { where, params: b.params };

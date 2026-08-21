@@ -17,14 +17,28 @@ export async function GET(
   const { productId } = await params;
   if (!UUID.test(productId)) return new NextResponse('not found', { status: 404 });
 
-  const rows = await query<{ id: string; link: string; feed_id: string; instance_id: string | null; advertiser_id: string | null; site_id: string | null }>(
-    `select p.id, p.link, p.feed_id,
-            wi.id as instance_id, ia.advertiser_id, wi.site_id
+  const sourceId = req.nextUrl.searchParams.get('s')?.match(UUID)?.[0] ?? null;
+  // The advertiser comes from the SOURCE that supplied the product when one is
+  // given (shared widgets carry several advertisers), falling back to the feed's
+  // owner. Attribution must never be guessed from the instance alone.
+  const rows = await query<{
+    id: string; link: string; affiliate_url: string | null; feed_id: string;
+    instance_id: string | null; advertiser_id: string | null; site_id: string | null;
+    deeplink: string | null;
+  }>(
+    `select p.id, p.link, p.affiliate_url, p.feed_id,
+            wi.id as instance_id, wi.site_id,
+            coalesce(src.advertiser_id, own.advertiser_id) as advertiser_id,
+            (ia.pricing #>> '{affiliate,deeplink_template}') as deeplink
      from product p
+     join feed own on own.id = p.feed_id
      left join widget_instance wi on wi.id = $2
-     left join instance_advertiser ia on ia.instance_id = wi.id
+     left join instance_source src on src.id = $3
+     left join instance_advertiser ia
+       on ia.instance_id = wi.id
+      and ia.advertiser_id = coalesce(src.advertiser_id, own.advertiser_id)
      where p.id = $1`,
-    [productId, req.nextUrl.searchParams.get('i')?.match(UUID)?.[0] ?? null],
+    [productId, req.nextUrl.searchParams.get('i')?.match(UUID)?.[0] ?? null, sourceId],
   );
   const row = rows[0];
   if (!row) return new NextResponse('not found', { status: 404 });
@@ -33,9 +47,20 @@ export async function GET(
   // anything that is not an absolute http(s) URL rather than letting
   // NextResponse.redirect throw (which would 500 after the click was logged)
   // or letting a feed launder an exotic scheme through our first-party domain.
+  // Destination precedence: the product's own affiliate URL, then an
+  // advertiser-level affiliate deeplink template, then the plain product link.
+  // {url} and {click_id} are substituted so the network can attribute the click.
+  let target = row.affiliate_url || row.link;
+  if (!row.affiliate_url && row.deeplink) {
+    target = row.deeplink
+      .replace('{url}', encodeURIComponent(row.link))
+      .replace('{click_id}', productId)
+      .replace('{subid}', productId);
+  }
+
   let destination: URL;
   try {
-    destination = new URL(row.link);
+    destination = new URL(target);
   } catch {
     return new NextResponse('not found', { status: 404 });
   }
@@ -67,9 +92,9 @@ export async function GET(
   }
   try {
     await query(
-      `insert into event (type, placement_id, instance_id, advertiser_id, product_id, site_id, click_id, device_class, quality_flags)
-       values ('click', $1, $2, $3, $4, $5, $6, $7, $8::jsonb)`,
-      [placementId, row.instance_id, row.advertiser_id, row.id, row.site_id, clickId, deviceClass, JSON.stringify(quality)],
+      `insert into event (type, placement_id, instance_id, advertiser_id, source_id, product_id, site_id, click_id, device_class, quality_flags)
+       values ('click', $1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)`,
+      [placementId, row.instance_id, row.advertiser_id, sourceId, row.id, row.site_id, clickId, deviceClass, JSON.stringify(quality)],
     );
   } catch {
     // Never lose the user on a logging failure — redirect anyway.

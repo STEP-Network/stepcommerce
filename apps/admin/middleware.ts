@@ -12,7 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 export const config = {
   matcher: [
     '/',
-    '/((?!api/serve$|api/events$|api/cron/|api/demo-feed$|c/|w\\.js$|_next/|favicon).*)',
+    '/((?!api/serve$|api/events$|api/cron/|api/demo-feed$|api/asset/|c/|w\\.js$|_next/|favicon).*)',
   ],
 };
 
