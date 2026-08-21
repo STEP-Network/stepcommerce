@@ -21,11 +21,14 @@ await build({
     join(here, '..', 'lib', 'rules.ts'),
     join(here, '..', 'lib', 'feed.ts'),
     join(here, '..', 'lib', 'dict.ts'),
+    join(here, '..', 'lib', 'ai-style.ts'),
+    join(here, '..', 'lib', 'snippet.ts'),
   ],
   outdir: out,
   bundle: true,
   format: 'esm',
   platform: 'node',
+  external: ['@anthropic-ai/sdk'],
   plugins: [
     {
       name: 'db-stub',

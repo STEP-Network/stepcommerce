@@ -71,10 +71,50 @@ const RESPONSE_SCHEMA = {
 } as const;
 
 /**
- * Pulls the page's own CSS: inline <style> blocks plus the first few linked
- * stylesheets. Best-effort by design — a page we cannot read still gets styled
- * from the screenshot.
+ * Pulls what a page declares about its own look, without fetching anything:
+ * the inline <style> blocks, the theme colour, the title, and the URLs of the
+ * linked stylesheets. Separated out so it can be tested against fixtures — the
+ * regexes here decide what the model gets to see.
  */
+export function extractStyleHints(html: string, pageUrl: string): {
+  inline: string;
+  title: string;
+  stylesheets: string[];
+} {
+  const title = /<title[^>]*>([^<]{1,200})</i.exec(html)?.[1]?.trim() ?? pageUrl;
+  const parts: string[] = [];
+  for (const m of html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)) parts.push(m[1]);
+  const theme = /<meta[^>]+name=["']theme-color["'][^>]+content=["']([^"']+)/i.exec(html)?.[1];
+  if (theme) parts.push(`/* meta theme-color */ :root { --theme-color: ${theme} }`);
+
+  const stylesheets: string[] = [];
+  for (const m of html.matchAll(/<link[^>]+>/gi)) {
+    if (!/rel=["'][^"']*stylesheet/i.test(m[0])) continue;
+    const href = /href=["']([^"']+)/i.exec(m[0])?.[1];
+    if (!href) continue;
+    try {
+      stylesheets.push(new URL(href, pageUrl).toString());
+    } catch {
+      // A malformed href is not worth failing the whole analysis over.
+    }
+  }
+  return { inline: parts.join('\n'), title, stylesheets };
+}
+
+/**
+ * Keeps the payload small AND useful: colour, font and shape declarations are
+ * what a design decision rests on; the rest of a 200 KB framework build is
+ * noise that would crowd out the parts that matter.
+ */
+export function relevantCss(css: string, limit = MAX_CSS_CHARS): string {
+  const picked = [...css.matchAll(/[^{}]*\{[^{}]*(?:color|background|font|border-radius|box-shadow)[^{}]*\}/gi)]
+    .map((m) => m[0].trim())
+    .join('\n');
+  return (picked || css).slice(0, limit);
+}
+
+/** Fetches the page and its stylesheets. Best-effort: a page we cannot read
+ *  still gets styled from the screenshot alone. */
 export async function fetchPageStyles(pageUrl: string): Promise<{ css: string; title: string; notes: string[] }> {
   const notes: string[] = [];
   const check = validateFeedUrl(pageUrl);
@@ -88,18 +128,9 @@ export async function fetchPageStyles(pageUrl: string): Promise<{ css: string; t
   if (!res.ok) throw new Error(`Kunne ikke hente siden: HTTP ${res.status}`);
   const html = (await res.text()).slice(0, 900_000);
 
-  const title = /<title[^>]*>([^<]{1,200})</i.exec(html)?.[1]?.trim() ?? pageUrl;
-  const parts: string[] = [];
-  for (const m of html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)) parts.push(m[1]);
-  const theme = /<meta[^>]+name=["']theme-color["'][^>]+content=["']([^"']+)/i.exec(html)?.[1];
-  if (theme) parts.push(`/* meta theme-color */ :root { --theme-color: ${theme} }`);
-
-  const hrefs: string[] = [];
-  for (const m of html.matchAll(/<link[^>]+rel=["'][^"']*stylesheet[^"']*["'][^>]*>/gi)) {
-    const href = /href=["']([^"']+)/i.exec(m[0])?.[1];
-    if (href) hrefs.push(new URL(href, pageUrl).toString());
-  }
-  for (const href of hrefs.slice(0, 3)) {
+  const hints = extractStyleHints(html, pageUrl);
+  const parts = [hints.inline];
+  for (const href of hints.stylesheets.slice(0, 3)) {
     try {
       const sheet = await fetch(href, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
       if (sheet.ok) parts.push(`/* ${href} */\n${(await sheet.text()).slice(0, 200_000)}`);
@@ -107,17 +138,10 @@ export async function fetchPageStyles(pageUrl: string): Promise<{ css: string; t
       notes.push(`Kunne ikke hente stylesheet: ${href}`);
     }
   }
-  if (!parts.length) notes.push('Ingen CSS fundet — styling bygger kun på screenshottet.');
+  const joined = parts.filter(Boolean).join('\n');
+  if (!joined) notes.push('Ingen CSS fundet — styling bygger kun på screenshottet.');
 
-  // Keep the payload small AND useful: colour, font and radius declarations are
-  // what we need; the rest of a 200 KB framework build is noise.
-  const css = parts.join('\n');
-  const relevant = [...css.matchAll(/[^{}]*\{[^{}]*(?:color|background|font|border-radius|box-shadow)[^{}]*\}/gi)]
-    .map((m) => m[0].trim())
-    .join('\n')
-    .slice(0, MAX_CSS_CHARS);
-
-  return { css: relevant || css.slice(0, MAX_CSS_CHARS), title, notes };
+  return { css: relevantCss(joined), title: hints.title, notes };
 }
 
 const SYSTEM = `Du er senior UI-designer på STEP Commerce, en dansk platform for kontekstuelle commerce-widgets.

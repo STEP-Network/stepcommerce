@@ -22,9 +22,56 @@ En platform hvor STEP indlæser annoncørers produktfeeds, bygger frit stylede r
 - **Template A "Native forum post"** (lav-det-selv.dk × Harald Nyborg): widget som forumindlæg — advertiser-logo som avatar, "Sponsoreret"-badge der spejler forumets badges, diskret ANNONCE-mærkning, konversationel copy i forum-tone, bladrende tilbudsavis (auto-flip ~2,6 s + "peelende" hjørne), kontekst-stribe "Relevant for denne tråd", puls-CTA. HN's rigtige farver: navy #10357F, blå #0097D6, gul #FFED00, rød #E40712 KUN til priser.
 - **Template B "Native recipe section"** (madensverden.dk): widget som en af sitets egne sektioner (ikon + serif-overskrift + hairline + chevron), match-linje med ingrediens-chips, tre produktkort med match-score-bar (animeres ved viewability), "derfor"-forklaring pr. produkt, "Bedste match"-badge, advertiser-attribution i footer.
 
+## Beslutninger og byg, aug 2026 (efter produktionsgennemgangen)
+
+**V-grænsen blev flyttet efter Ulriks feedback-runde:** monetiseringsmotoren
+bygges nu, affiliate holdes simpelt, og shared widgets er kernekravet — "en vin
+widget med Coops, Salling Groups og Dagrofas vinkartotek eller udvalgte
+produkter, med conditions på hvert feed, så jeg står tilbage med måske 10
+produkter fra et feed, 100 fra et andet og 2 fra et tredje i 1 widget."
+
+- **`instance_source`** er den bærende model: én række pr. annoncørfeed i en
+  widget, med egne conditions (samme JSONB-form som product_rule), eget
+  produktloft og prioritet. Annoncøren følger altid feedet (aldrig formularen),
+  så attribution ikke kan pege forkert. `event.source_id` gør rapportering
+  pr. kilde mulig.
+- **Allokering er vægtet round-robin, ikke global relevans.** Første version
+  rangerede hele puljen på relevans, og Sallings 200 varer åd alle pladser —
+  Coop (som betaler) fik nul. Nu tager kilderne pladser på tur (vægt =
+  pladser pr. runde), relevans-sorteret inden for hver kilde. Testet: 6 pladser
+  → Coop 2-3, Salling 2, Dagrofa 1-2 i begge targeting-grene.
+- **Wizard i stedet for fem faner.** Template/site/instance/placement/preview
+  er samlet i `/widgets`: type & site → produkter → monetisering → design →
+  targeting → embed & live. Wizarden ejer sit private design-template og sit
+  placement; "gå live" er gated server-side på samme blokeringsliste som
+  UI'et viser.
+- **Monetisering pr. annoncør, frit kombinerbart:** CPC, CPM, affiliate
+  (deeplink-template med {url}/{click_id}) og fast pris. Primær model afledes
+  til rapportering; alt tælles, intet faktureres endnu.
+- **Manuelle produkter** hænger på et autooprettet `manual`-feed pr. annoncør,
+  undtaget fetch-friskhed (der er ingen kilde), med affiliate_url som
+  foretrukken klik-destination.
+- **AI-styling** læser sidens rigtige CSS (inline styles + første 3 stylesheets,
+  filtreret til farve/font/form-deklarationer) plus et screenshot af området,
+  og returnerer design-tokens via structured output (`claude-opus-5`) —
+  aldrig rå CSS, og annonce-mærkningen kan ikke designes væk.
+- **Skabeloner er kopier.** "Gem som skabelon" kopierer widgettens design til
+  biblioteket; "Anvend" kopierer ind i widgettens eget template. Ingen deling
+  af levende rækker mellem widgets.
+
 ## Hårde læringer fra produktionsgennemgangen (aug 2026)
 Disse fejl var i koden og blev fundet ved review + test mod en kørende instans.
 De må ikke komme tilbage — der er tests for dem:
+- **Next.js basePath gælder ikke alt.** `redirect()` i server actions, plain
+  `<a href>` og GET-formularer får IKKE `/stepcommerce` præfikset (kun
+  `next/link` gør). Wizardens redirects landede skiftevis på 404 og
+  `/stepcommerce/stepcommerce/…`. Alt går nu gennem `redirectWithBasePath()`/
+  `basePathUrl()`.
+- **Farvevælgere poster altid.** Én "Gem design" skrev `#ffffff` i samtlige
+  ubrugte farve-tokens — hvid tekst på hvid flade. Farver kræver nu eksplicit
+  tilvalg pr. felt.
+- **`redirect()` kaster.** En succes-redirect inde i et `try` blev fanget af
+  `catch` og rapporteret som fejl ("AI-styling fejlede" efter succes).
 - **Ordbogsmatch skal være ord-ankret.** Fri substring-match betød at "and"
   (fugl) matchede "vand", "koriander" og "mandler" — en laks-opskrift fik en
   fjerkræ-rødvin med chippen "and". Termer ≤3 tegn matcher kun som helt ord.

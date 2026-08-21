@@ -4,12 +4,15 @@ Kontekstuel commerce-widget-platform. **Kilden til sandhed er skillen i
 `.claude/skills/step-commerce/` — læs `references/spec.md` (§1–15) og
 `references/product-summary.md` (beslutningslog) før du ændrer noget.**
 
-## V1-grænsen (ufravigelig)
+## V-grænsen (opdateret aug 2026)
 
-Dette repo bygger **V1 "Exclusive"** (spec §2). Byg IKKE V2/V3-features:
-ingen shared widgets, ingen pricing engine, ingen affiliate-integration,
-ingen auto-optimisering, ingen AI-styling, ingen publisher-logins.
-CPC **tælles og rapporteres** i V1 (rate card til V2), men faktureres ikke.
+Repoet byggede oprindeligt **V1 "Exclusive"** (spec §2). Efter produktbeslutning
+aug 2026 er grænsen flyttet: **shared widgets** (flere annoncører/feeds pr.
+widget via `instance_source`), **monetiseringsmotor** (CPC/CPM/affiliate/fast
+pris pr. annoncør, frit kombinerbart), **simpel affiliate** (deeplink-template +
+manuelle produkter) og **AI-styling** er bygget. Stadig IKKE: auto-optimisering,
+publisher-logins, affiliate-integrationer mod netværks-API'er.
+CPC/CPM **tælles og rapporteres**, men faktureres ikke endnu.
 
 ## Ufravigelige regler
 
@@ -78,6 +81,13 @@ Byggeorden = spec §15.
 - [x] 6. Embed-loader + GAM-kreativ-wrapper (snippet generator)
 - [x] 7. Event-ingestion + klik-redirect + rollups + dashboard
 - [x] 8. Feed health + fallback-adfærd
+- [x] 10. Delte widgets: instance_source med conditions + loft pr. feed,
+  vægtet round-robin-allokering, attribution pr. kilde (`event.source_id`).
+- [x] 11. Widget-wizard (`/widgets`): type → produkter → monetisering → design
+  (AI-styling + visuel/kode-editor + live preview) → targeting → embed/GAM.
+  Templates er gemte kopier. Annoncør-hub med logo-upload, kontakter, feeds,
+  produkt-browser (søg/filter/liste/gitter) og manuelle affiliate-produkter.
+  Site-taksonomi (`site.kv_taxonomy`) driver targeting-UI'et.
 - [~] 9. Deploy (Vercel + Neon), CNAME, pilot-instans
   - **Vercel:** projekt `stepcommerce` (team STEP Network) er oprettet, git-linket
     til repoet, root directory `apps/admin`, basePath `/stepcommerce`, builds
@@ -91,13 +101,23 @@ Byggeorden = spec §15.
     + dict-mappings på `mv_ingredients`, demo-feed (`/api/demo-feed`).
   - **Rewrite:** branch `stepcommerce-rewrite` i `step-network-website` tilføjer
     proxy `/stepcommerce/*` → stepcommerce.vercel.app. Ikke merget endnu.
-  - Migrations kørt i produktion (schema_migration v1 + v2). Pilot-instansen står
+  - Migrations kørt i produktion (schema_migration v1 + v2 + v3 — 19 tabeller). Pilot-instansen står
     på **draft** (demo-feed må ikke ramme en publisher-side).
   - Udestår (kræver dashboard-adgang): env vars i Vercel (`DATABASE_URL`,
     `PUBLIC_ORIGIN`, `ADMIN_USER`, `ADMIN_PASSWORD`, `CRON_SECRET`),
     production branch = `stepcommerce`, merge af rewrite-branchen — og til
     sidst: skift demo-feed ud med annoncørens rigtige feed, tjek i `/preview`,
     og sæt instansen live.
+
+## Vigtige faldgruber (lært på den hårde måde)
+
+- `redirect()` i en server action får IKKE basePath konsistent → brug altid
+  `redirectWithBasePath()` fra `lib/base-path.ts` (absolut URL) og **await** den.
+- Plain `<a href>` og `<form method="get">` får heller ikke basePath (kun
+  `next/link` gør) → pak URL'er i `basePathUrl()`.
+- `<input type="color">` poster altid en værdi → farve-tokens gemmes kun når
+  deres "brug denne farve"-checkbox er sat (ellers bliver alt `#ffffff`).
+- `redirect()` kaster — succes-redirects må aldrig ligge i et `try` med catch.
 
 ## Operabilitet
 
