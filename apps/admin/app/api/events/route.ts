@@ -13,8 +13,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const body = await req.json();
     if (!TYPES.has(body.type)) return NextResponse.json({ ok: false }, { status: 400 });
     const uuid = (v: unknown): string | null => (typeof v === 'string' && UUID.test(v) ? v : null);
+    // Cap both value length and key count: the endpoint is public, so an
+    // uncapped kv_context lets one request persist a multi-megabyte JSONB row.
     const kv: Record<string, string> = {};
     for (const [k, v] of Object.entries(body.kv_context ?? {})) {
+      if (Object.keys(kv).length >= 40) break;
       if (typeof v === 'string' && k.length <= 128) kv[k] = v.slice(0, 512);
     }
     const quality: string[] = [];

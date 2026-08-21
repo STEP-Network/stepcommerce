@@ -47,7 +47,11 @@ function compileNode(node: RuleNode, b: SqlBuilder): string {
   if ('all' in node || 'any' in node) {
     const group = node as { all?: RuleNode[]; any?: RuleNode[] };
     const children = group.all ?? group.any ?? [];
-    if (!children.length) return 'true';
+    // An empty group must NOT compile to `true`: that turns the rule into
+    // "match every product in the feed", which serves the whole catalogue on
+    // any page. Rejecting it surfaces as a save error in the admin and as
+    // render:false at serve time.
+    if (!children.length) throw new Error('Empty rule group — remove it or add a condition');
     const joiner = group.all ? ' and ' : ' or ';
     return '(' + children.map((c) => compileNode(c, b)).join(joiner) + ')';
   }
@@ -66,9 +70,15 @@ function compileNode(node: RuleNode, b: SqlBuilder): string {
       return `${col} = any(${b.bind(values)})`;
     }
     case 'gt':
-      return `${col} > ${b.bind(String(leaf.value))}::numeric`;
-    case 'lt':
-      return `${col} < ${b.bind(String(leaf.value))}::numeric`;
+    case 'lt': {
+      // Guard the cast: `title > $1::numeric` type-errors at SERVE time, where
+      // the throw is swallowed and the widget just goes dark.
+      if (!field.numeric) throw new Error(`${leaf.operator} is only valid on numeric fields, not ${leaf.field}`);
+      if (!/^-?\d+(\.\d+)?$/.test(String(leaf.value))) {
+        throw new Error(`${leaf.operator} needs a numeric value, got "${String(leaf.value)}"`);
+      }
+      return `${col} ${leaf.operator === 'gt' ? '>' : '<'} ${b.bind(String(leaf.value))}::numeric`;
+    }
     case 'exists':
       return `${col} is not null`;
     default:

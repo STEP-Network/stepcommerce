@@ -1,6 +1,7 @@
 // First-party event tracking (spec §8). Aggregate-only, no cookies, no IDs.
 // Viewability = IntersectionObserver ≥50% visible for 1 continuous second.
 
+import { safe } from './dom';
 import type { TrackingConfig } from './types';
 
 export type EventType = 'load' | 'viewable' | 'product_impression' | 'click';
@@ -71,21 +72,33 @@ export class Tracker {
       if (typeof IntersectionObserver === 'undefined') return;
       let timer: ReturnType<typeof setTimeout> | undefined;
       const io = new IntersectionObserver(
-        (entries) => {
+        safe((entries: IntersectionObserverEntry[]) => {
+          // Stop holding a reference to a removed element (SPA route change,
+          // infinite scroll): otherwise the observer keeps the whole shadow
+          // tree alive, and a pending timer would report a viewable impression
+          // for a widget that no longer exists.
+          if (!el.isConnected) {
+            if (timer !== undefined) clearTimeout(timer);
+            io.disconnect();
+            return;
+          }
           for (const entry of entries) {
             if (entry.intersectionRatio >= 0.5) {
               if (timer === undefined) {
-                timer = setTimeout(() => {
-                  fire();
-                  io.disconnect();
-                }, 1000);
+                timer = setTimeout(
+                  safe(() => {
+                    if (el.isConnected) fire();
+                    io.disconnect();
+                  }),
+                  1000,
+                );
               }
             } else if (timer !== undefined) {
               clearTimeout(timer);
               timer = undefined;
             }
           }
-        },
+        }),
         { threshold: [0, 0.5] },
       );
       io.observe(el);

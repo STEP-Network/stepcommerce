@@ -2,7 +2,7 @@
 // The approved native templates (forum_post, recipe_section) are the V1 flagship
 // designs; these cover conventional fixed-size placements like 930×180.
 
-import { h, link } from '../dom';
+import { h, img, link } from '../dom';
 import type { ServeProduct, TemplateId, TemplateMeta } from '../types';
 import type { Tracker } from '../track';
 
@@ -34,28 +34,40 @@ export function renderCards(
   tracker: Tracker,
   wrapClick: (url: string) => string,
 ): void {
+  const advertiser = meta.advertiserName || '';
   const wrap = h('div', { class: 'cd-wrap' });
   wrap.append(h('span', { class: 'sc-annonce cd-adlabel' }, ['Annonce']));
   const mode = layout === 'single_card' ? 'stacked' : layout;
   const track = h('div', { class: `cd-track cd-track--${mode}` });
+  if (mode === 'carousel') {
+    // A horizontally scrollable region must be keyboard reachable (WCAG 2.1.1).
+    track.setAttribute('tabindex', '0');
+    track.setAttribute('role', 'group');
+    track.setAttribute('aria-label', 'Produkter');
+  }
   const list = layout === 'single_card' ? products.slice(0, 1) : products;
   for (const p of list) {
     const card = link(wrapClick(p.clickUrl), 'cd-card', []);
     card.style.position = 'relative';
     if (p.badge) card.append(h('span', { class: 'sc-badge cd-badge' }, [p.badge]));
-    const img = h('div', { class: 'cd-imgwrap' });
-    if (p.imageUrl) img.append(h('img', { src: p.imageUrl, alt: p.title, loading: 'lazy' }));
-    card.append(img);
+    const imgWrap = h('div', { class: 'cd-imgwrap' });
+    const productImg = img(p.imageUrl, p.title);
+    if (productImg) imgWrap.append(productImg);
+    card.append(imgWrap);
     card.append(h('div', { class: 'cd-title sc-title' }, [p.title]));
-    if (p.brand ?? p.subtitle) card.append(h('div', { class: 'cd-brand' }, [p.subtitle ?? p.brand]));
+    const descriptor = p.subtitle ?? p.brand;
+    if (descriptor) card.append(h('div', { class: 'cd-brand' }, [descriptor]));
     const price = h('div', { class: 'cd-price' }, [p.salePrice ?? p.price ?? '']);
     if (p.salePrice && p.price) price.append(h('span', { class: 'was' }, [p.price]));
     card.append(price);
     card.append(h('span', { class: 'sc-cta cd-cta' }, [meta.ctaLabel ?? 'Se produktet →']));
+    card.setAttribute('aria-label', `${p.title} — ${meta.ctaLabel ?? 'se produktet'}`);
     tracker.observeProduct(card, p.id);
     track.append(card);
   }
   wrap.append(track);
-  wrap.append(h('div', { class: 'cd-foot' }, [`Tilbud fra ${meta.advertiserName} · leveres af STEP Commerce`]));
+  wrap.append(h('div', { class: 'cd-foot' }, [
+    advertiser ? `Tilbud fra ${advertiser} · leveres af STEP Commerce` : 'Annonce · leveres af STEP Commerce',
+  ]));
   root.append(wrap);
 }

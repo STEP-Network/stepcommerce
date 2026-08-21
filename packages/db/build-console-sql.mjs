@@ -74,13 +74,19 @@ begin
   insert into stepcommerce.kv_dictionary (site_id, name, entries)
   values (v_site, 'Ingredienser → pairing-segment', '{
     "skinkeschnitzler": "svinekød", "skinke": "svinekød", "flæsk": "svinekød",
-    "nakkefilet": "svinekød", "svinemørbrad": "svinekød", "bacon": "svinekød",
-    "frikadeller": "svinekød",
-    "oksemørbrad": "oksekød", "hakket oksekød": "oksekød", "entrecote": "oksekød",
-    "culotte": "oksekød", "oksesteg": "oksekød", "bøf": "oksekød",
-    "kylling": "fjerkræ", "kyllingebryst": "fjerkræ", "kalkun": "fjerkræ", "and": "fjerkræ",
-    "torsk": "fisk", "laks": "fisk", "rødspætte": "fisk", "rejer": "fisk", "muslinger": "fisk",
-    "pasta": "pasta", "spaghetti": "pasta", "lasagne": "pasta", "risotto": "pasta"
+    "nakkefilet": "svinekød", "svinemørbrad": "svinekød", "svinekød": "svinekød",
+    "bacon": "svinekød", "frikadelle": "svinekød", "pancetta": "svinekød", "kotelet": "svinekød",
+    "oksemørbrad": "oksekød", "oksekød": "oksekød", "entrecote": "oksekød",
+    "culotte": "oksekød", "oksesteg": "oksekød", "hakkebøf": "oksekød",
+    "oksebøf": "oksekød", "ribeye": "oksekød",
+    "bøf": {"segment": "oksekød", "match": "exact"},
+    "kylling": "fjerkræ", "kalkun": "fjerkræ", "andebryst": "fjerkræ",
+    "andelår": "fjerkræ", "andesteg": "fjerkræ",
+    "and": {"segment": "fjerkræ", "match": "exact"},
+    "torsk": "fisk", "laks": "fisk", "rødspætte": "fisk", "rejer": "fisk",
+    "muslinger": "fisk", "tun": "fisk", "sild": "fisk", "hummer": "fisk",
+    "pasta": "pasta", "spaghetti": "pasta", "lasagne": "pasta",
+    "tagliatelle": "pasta", "risotto": "pasta"
   }')
   returning id into v_dict;
 
@@ -106,7 +112,7 @@ begin
       "whyLabel": "Hvorfor ser jeg denne?",
       "whyText": "Anbefalingen er valgt ud fra opskriftens ingredienser — ikke ud fra dig. Vi bruger hverken cookies eller personlige oplysninger."
     }
-  }', '{"strategy": "hide"}', 'live')
+  }', '{"strategy": "hide"}', 'draft')
   returning id into v_inst;
 
   insert into stepcommerce.instance_advertiser (instance_id, advertiser_id, product_source, pricing_model, rate)

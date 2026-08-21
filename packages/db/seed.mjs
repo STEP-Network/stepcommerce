@@ -78,17 +78,34 @@ const [site] = await sql`
   returning id`;
 
 // Per-site term dictionary (spec §14): page ingredient tokens → pairing segment.
+// Terms match at a WORD START inside each ingredient, so "skinke" also matches
+// "skinkeschnitzler" and "Fanø skinke". Short words must be spelled out as
+// whole words or as their real compounds — a bare 3-letter prefix like "and"
+// (duck) would otherwise match "vand" (water) and "koriander", and "bøf" would
+// match "bøffelmozzarella". Use {"segment":…, "match":"exact"} to force
+// whole-word matching on a longer term.
+const DICTIONARY = {
+  // svinekød
+  skinkeschnitzler: 'svinekød', skinke: 'svinekød', flæsk: 'svinekød', nakkefilet: 'svinekød',
+  svinemørbrad: 'svinekød', svinekød: 'svinekød', bacon: 'svinekød', frikadelle: 'svinekød',
+  pancetta: 'svinekød', kotelet: 'svinekød',
+  // oksekød
+  oksemørbrad: 'oksekød', oksekød: 'oksekød', entrecote: 'oksekød', culotte: 'oksekød',
+  oksesteg: 'oksekød', hakkebøf: 'oksekød', oksebøf: 'oksekød', ribeye: 'oksekød',
+  'bøf': { segment: 'oksekød', match: 'exact' },
+  // fjerkræ
+  kylling: 'fjerkræ', kalkun: 'fjerkræ', andebryst: 'fjerkræ', andelår: 'fjerkræ',
+  andesteg: 'fjerkræ', 'and': { segment: 'fjerkræ', match: 'exact' },
+  // fisk
+  torsk: 'fisk', laks: 'fisk', rødspætte: 'fisk', rejer: 'fisk', muslinger: 'fisk',
+  tun: 'fisk', sild: 'fisk', hummer: 'fisk',
+  // pasta / risotto
+  pasta: 'pasta', spaghetti: 'pasta', lasagne: 'pasta', tagliatelle: 'pasta', risotto: 'pasta',
+};
+
 const [dict] = await sql`
   insert into kv_dictionary (site_id, name, entries)
-  values (${site.id}, 'Ingredienser → pairing-segment', ${JSON.stringify({
-    skinkeschnitzler: 'svinekød', skinke: 'svinekød', flæsk: 'svinekød', nakkefilet: 'svinekød',
-    svinemørbrad: 'svinekød', bacon: 'svinekød', frikadeller: 'svinekød',
-    oksemørbrad: 'oksekød', 'hakket oksekød': 'oksekød', entrecote: 'oksekød', culotte: 'oksekød',
-    oksesteg: 'oksekød', 'bøf': 'oksekød',
-    kylling: 'fjerkræ', kyllingebryst: 'fjerkræ', kalkun: 'fjerkræ', and: 'fjerkræ',
-    torsk: 'fisk', laks: 'fisk', rødspætte: 'fisk', rejer: 'fisk', muslinger: 'fisk',
-    pasta: 'pasta', spaghetti: 'pasta', lasagne: 'pasta', risotto: 'pasta',
-  })})
+  values (${site.id}, 'Ingredienser → pairing-segment', ${JSON.stringify(DICTIONARY)})
   returning id`;
 
 const [tpl] = await sql`
@@ -96,11 +113,14 @@ const [tpl] = await sql`
   values ('Native recipe section', 'recipe_section', ${JSON.stringify(RECIPE_TOKENS)}, '{"default": 3}')
   returning id`;
 
+// Seeded as DRAFT on purpose: the feed above is synthetic demo data, and a live
+// instance would render "(DEMO)" wines on a real publisher page. Flip to live
+// only after pointing the feed at the advertiser's real feed.
 const [inst] = await sql`
   insert into widget_instance (template_id, site_id, name, token_overrides, fallback_config, status)
   values (${tpl.id}, ${site.id}, 'Vin til opskrifter — madensverden.dk',
           ${JSON.stringify({ __meta: INSTANCE_META })},
-          '{"strategy": "hide"}', 'live')
+          '{"strategy": "hide"}', 'draft')
   returning id`;
 
 await sql`

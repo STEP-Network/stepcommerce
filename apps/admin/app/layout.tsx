@@ -12,6 +12,8 @@ const NAV = [
   ['/sites', 'Sites'],
   ['/instances', 'Instances'],
   ['/placements', 'Placements'],
+  ['/preview', 'Preview'],
+  ['/health', 'Health'],
 ] as const;
 
 export default function RootLayout({ children }: { children: ReactNode }) {

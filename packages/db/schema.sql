@@ -5,6 +5,16 @@
 
 create extension if not exists pgcrypto;
 
+-- Applied migration bookkeeping. schema.sql is the baseline (version 1);
+-- everything after it lives in packages/db/migrations/NNN_*.sql and is applied
+-- in order by `npm run migrate`. See migrate.mjs.
+create table schema_migration (
+  version    int primary key,
+  name       text not null,
+  applied_at timestamptz not null default now()
+);
+insert into schema_migration (version, name) values (1, 'baseline');
+
 -- ---------------------------------------------------------------- advertiser
 create table advertiser (
   id              uuid primary key default gen_random_uuid(),
@@ -31,6 +41,11 @@ create table feed (
   status         text not null default 'healthy' check (status in ('healthy', 'stale', 'failing')),
   error_log      jsonb not null default '[]',
   max_age_hours  int not null default 24,   -- price-freshness rule (spec §4.5)
+  -- Last time the fetched CONTENT actually differed (hash comparison, §4.4).
+  -- A feed frozen behind a CDN keeps fetching fine but must still go stale.
+  content_changed_at timestamptz,
+  -- Non-Google XML: element that wraps one product, when it is not <item>.
+  item_element   text,
   created_at     timestamptz not null default now(),
   updated_at     timestamptz not null default now()
 );
@@ -212,12 +227,44 @@ create index event_click_idx on event (click_id) where click_id is not null;
 create table click (
   id          uuid primary key default gen_random_uuid(),
   product_id  uuid not null references product(id),
-  instance_id uuid not null,
+  -- nullable: a click can arrive without a resolvable instance (copied link,
+  -- an instance deleted after the page was cached). Losing the instance must
+  -- not lose the click.
+  instance_id uuid,
   placement_id uuid,
   destination text not null,
   created_at  timestamptz not null default now(),
   redeemed_at timestamptz
 );
+
+-- ------------------------------------------------------------ serve_decision
+-- Counts every /api/serve outcome per hour, INCLUDING the no-render reasons.
+-- Without this a misspelled key-value, a paused instance or an empty rule is
+-- indistinguishable from "no traffic yet": the widget fails silent by design,
+-- so the only signal is here.
+create table serve_decision (
+  hour         timestamptz not null,
+  placement_id uuid not null,
+  reason       text not null,   -- 'rendered' | no_rule_match | no_products | limited_ads | ...
+  count        bigint not null default 0,
+  primary key (hour, placement_id, reason)
+);
+
+-- ------------------------------------------------------------- feed_fetch_log
+-- One row per fetch attempt, so feed uptime (spec §13: >= 99%) is computable
+-- and an overnight breakage is visible the next morning.
+create table feed_fetch_log (
+  id         bigint generated always as identity primary key,
+  feed_id    uuid not null references feed(id) on delete cascade,
+  ok         boolean not null,
+  status     text not null,
+  products   int not null default 0,
+  dropped    int not null default 0,
+  content_changed boolean,
+  error      text,
+  ts         timestamptz not null default now()
+);
+create index feed_fetch_log_idx on feed_fetch_log (feed_id, ts desc);
 
 -- --------------------------------------------------------------- stats_hourly
 -- Dimensions are not null: the rollup coalesces missing uuids to the zero uuid

@@ -18,6 +18,11 @@ export default async function InstanceDetail({ params }: { params: Promise<{ id:
     const ruleId = String(formData.get('rule_id') ?? '') || null;
     const priority = Number(formData.get('priority') ?? 0);
     if (!pageKey || !ruleId) return;
+    // An incomplete mapping never matches anything and does so silently: a dict
+    // mapping without dict_id/segment, or an eq/contains without a value
+    // (contains with '' would match every page that merely has the key).
+    if (operator === 'dict' && (!dictId || !segment)) return;
+    if (operator !== 'dict' && !pageValue) return;
     await sql`
       insert into kv_mapping (instance_id, page_key, operator, page_value, dict_id, segment, target, priority)
       values (${id}, ${pageKey}, ${operator}, ${pageValue}, ${dictId}, ${segment},
@@ -53,7 +58,27 @@ export default async function InstanceDetail({ params }: { params: Promise<{ id:
     'use server';
     const overrides = JSON.parse(String(formData.get('token_overrides') ?? '{}'));
     const fallback = JSON.parse(String(formData.get('fallback_config') ?? '{"strategy":"hide"}'));
-    const status = String(formData.get('status') ?? 'draft');
+    let status = String(formData.get('status') ?? 'draft');
+    if (status === 'live') {
+      // Going live is the one irreversible-feeling action here, so it is gated:
+      // an instance with no mappings and no explicit default set would serve its
+      // whole catalogue on every matching page, and a demo feed must never
+      // reach a publisher.
+      const [check] = await query<{ mappings: string; demo: boolean; feed_ok: boolean }>(
+        `select (select count(*) from kv_mapping m where m.instance_id = wi.id)::text as mappings,
+                coalesce(bool_or(f.source_url like '%/api/demo-feed%'), false) as demo,
+                coalesce(bool_or(f.status = 'healthy'), false) as feed_ok
+         from widget_instance wi
+         join instance_advertiser ia on ia.instance_id = wi.id
+         left join feed f on f.advertiser_id = ia.advertiser_id
+         where wi.id = $1 group by wi.id`,
+        [id],
+      );
+      const hasDefault = fallback?.strategy === 'default_products' || fallback?.unmapped === true;
+      if (check && (check.demo || (Number(check.mappings) === 0 && !hasDefault) || !check.feed_ok)) {
+        status = 'draft';
+      }
+    }
     await sql`
       update widget_instance
       set token_overrides = ${JSON.stringify(overrides)}, fallback_config = ${JSON.stringify(fallback)},
@@ -64,10 +89,10 @@ export default async function InstanceDetail({ params }: { params: Promise<{ id:
 
   const instances = await query<{
     id: string; name: string; status: string; template: string; layout_type: string; site: string; site_id: string;
-    advertiser: string; token_overrides: Record<string, unknown>; fallback_config: Record<string, unknown>;
+    advertiser: string; advertiser_id: string; token_overrides: Record<string, unknown>; fallback_config: Record<string, unknown>;
   }>(
     `select wi.id, wi.name, wi.status, wt.name as template, wt.layout_type, s.domain as site, s.id as site_id,
-            a.name as advertiser, wi.token_overrides, wi.fallback_config
+            a.name as advertiser, a.id as advertiser_id, wi.token_overrides, wi.fallback_config
      from widget_instance wi
      join widget_template wt on wt.id = wi.template_id
      join site s on s.id = wi.site_id
@@ -85,15 +110,25 @@ export default async function InstanceDetail({ params }: { params: Promise<{ id:
      where m.instance_id = $1 order by m.priority`,
     [id],
   );
+  // The rule list MUST be scoped to this instance's advertiser: an exclusive
+  // widget that serves a competitor's products (while attributing the clicks to
+  // this advertiser) is the worst failure this UI can cause, and a name-only
+  // dropdown listing every advertiser's "Pairing: fisk" makes it a single
+  // mis-click. The resolver enforces the same boundary server-side.
   const [rules, dicts] = await Promise.all([
-    query<{ id: string; name: string }>('select id, name from product_rule order by name'),
+    query<{ id: string; name: string; feed: string }>(
+      `select pr.id, pr.name, f.name as feed
+       from product_rule pr join feed f on f.id = pr.feed_id
+       where f.advertiser_id = $1 order by pr.name`,
+      [inst.advertiser_id],
+    ),
     query<{ id: string; name: string }>('select id, name from kv_dictionary where site_id = $1 order by name', [inst.site_id]),
   ]);
 
   return (
     <>
       <h1>{inst.name} <span className={`status ${inst.status}`}>{inst.status}</span></h1>
-      <p className="muted">{inst.template} (<code>{inst.layout_type}</code>) · {inst.site} · {inst.advertiser}</p>
+      <p className="muted">{inst.template} (<code>{inst.layout_type}</code>) · {inst.site} · {inst.advertiser} · <code>{inst.id}</code></p>
 
       <h2>KV → produkt-mappings (evalueres i prioritetsrækkefølge)</h2>
       <table>
@@ -125,7 +160,12 @@ export default async function InstanceDetail({ params }: { params: Promise<{ id:
         <label>Page-value (eq/contains)<input name="page_value" /></label>
         <label>Ordbog (dict)<select name="dict_id"><option value="">—</option>{dicts.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
         <label>Segment (dict — ordbogen skal producere dette segment)<input name="segment" placeholder="svinekød" /></label>
-        <label>Produktregel<select name="rule_id">{rules.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
+        <label>Produktregel (kun {inst.advertiser}s egne)
+          <select name="rule_id" required>
+            {rules.length === 0 && <option value="">— ingen regler for denne advertiser —</option>}
+            {rules.map((r) => <option key={r.id} value={r.id}>{r.name} ({r.feed})</option>)}
+          </select>
+        </label>
         <label>Prioritet<input name="priority" type="number" defaultValue={0} /></label>
         <button>Tilføj</button>
       </form>
@@ -152,6 +192,11 @@ export default async function InstanceDetail({ params }: { params: Promise<{ id:
             <option value="paused">paused</option><option value="archived">archived</option>
           </select>
         </label>
+        <p className="muted" style={{ margin: 0 }}>
+          &quot;live&quot; afvises automatisk (og sættes til draft), hvis instansen ingen mappings og intet
+          eksplicit default-sæt har, hvis feedet ikke er healthy, eller hvis feedet stadig er demo-feedet.
+          Tjek opsætningen i <a href="/stepcommerce/preview">Preview</a> først.
+        </p>
         <button>Gem</button>
       </form>
     </>

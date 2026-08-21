@@ -8,6 +8,7 @@
 
 import { query, sql } from './db';
 import { compileRule, type RuleConditions } from './rules';
+import { matchSegments, segmentTerms, type DictEntries } from './dict';
 import type { DesignTokens, ServeProduct, ServeResponse, TemplateId, TemplateMeta } from './serve-types';
 
 type Kv = Record<string, string>;
@@ -36,6 +37,9 @@ export interface ResolveInput {
   placementCode: string;
   kv: Kv;
   origin: string; // public base URL for click redirects + event beacons
+  /** Reported by the client; baked into click URLs so clicks and impressions
+   *  aggregate into the same stats_hourly row. */
+  deviceClass?: string;
   preview?: boolean; // admin preview: allow draft instances
 }
 
@@ -46,30 +50,21 @@ function kvValue(kv: Kv, key: string): string | undefined {
   return undefined;
 }
 
-function tokenize(value: string): string[] {
-  return value
-    .toLowerCase()
-    .split(/[,;·]+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
+// Dictionaries change rarely and are read once per mapping evaluated, so a
+// short-lived cache removes several DB round-trips from every serve.
+const dictCache = new Map<string, { at: number; entries: DictEntries }>();
+const DICT_TTL_MS = 60_000;
 
-/** Substring/dictionary matching on multi-value KVs: returns matched segments + the terms that hit. */
-async function dictMatch(dictId: string, pageValue: string): Promise<{ segments: Set<string>; terms: string[] }> {
-  const rows = await query<{ entries: Record<string, string> }>('select entries from kv_dictionary where id = $1', [dictId]);
+async function loadDictionary(dictId: string): Promise<DictEntries> {
+  const cached = dictCache.get(dictId);
+  if (cached && Date.now() - cached.at < DICT_TTL_MS) return cached.entries;
+  const rows = await query<{ entries: DictEntries }>(
+    'select entries from kv_dictionary where id = $1',
+    [dictId],
+  );
   const entries = rows[0]?.entries ?? {};
-  const segments = new Set<string>();
-  const terms: string[] = [];
-  const haystack = pageValue.toLowerCase();
-  const tokens = tokenize(pageValue);
-  for (const [term, segment] of Object.entries(entries)) {
-    const needle = term.toLowerCase().replace(/_/g, ' ');
-    if (tokens.some((t) => t.includes(needle)) || haystack.includes(needle)) {
-      segments.add(segment);
-      terms.push(needle);
-    }
-  }
-  return { segments, terms };
+  dictCache.set(dictId, { at: Date.now(), entries });
+  return entries;
 }
 
 async function matchCondition(
@@ -85,8 +80,9 @@ async function matchCondition(
       return { hit: pageValue.toLowerCase().includes(String(match.value ?? '').toLowerCase()) };
     case 'dict': {
       if (!match.dict_id || !match.segment) return { hit: false };
-      const { segments, terms } = await dictMatch(match.dict_id, pageValue);
-      return { hit: segments.has(match.segment), matchedTerms: terms };
+      const bySegment = matchSegments(await loadDictionary(match.dict_id), pageValue);
+      const terms = segmentTerms(bySegment, match.segment);
+      return terms ? { hit: true, matchedTerms: terms } : { hit: false };
     }
     default:
       return { hit: false };
@@ -100,46 +96,83 @@ interface ProductSource {
   feed_id?: string;
 }
 
-/** Resolves a product source to renderable rows; stale-feed products never render (spec §4.5). */
-async function resolveProducts(source: ProductSource, feedId: string, limit: number): Promise<ProductRow[]> {
-  const freshness = `
+// A recommendation widget ranks by relevance, not by price: custom_label_2
+// carries the advertiser's 0-100 match score, so the highest-scoring product
+// leads (and matches the "Bedste match" badge the template puts on it). The
+// regex guard keeps a non-numeric label from breaking the cast. Price is the
+// tie-breaker for feeds that carry no score.
+const RELEVANCE_ORDER = `
+  (case when custom_label_2 ~ '^[0-9]+(\\.[0-9]+)?$' then custom_label_2::numeric end) desc nulls last,
+  coalesce(sale_price_amount, price_amount) nulls last`;
+
+/**
+ * Resolves a product source to renderable rows; stale-feed products never
+ * render (spec §4.5). `advertiserId` is the exclusivity boundary: every product
+ * served must belong to the instance's own advertiser, so a rule or explicit
+ * list that points at another advertiser's feed returns nothing rather than
+ * rendering a competitor's products under this advertiser's branding (and
+ * billing the clicks to the wrong party).
+ */
+async function resolveProducts(
+  source: ProductSource,
+  feedId: string,
+  limit: number,
+  advertiserId: string,
+): Promise<ProductRow[]> {
+  const ownedFeed = `
+    exists (select 1 from feed ownf where ownf.id = product.feed_id and ownf.advertiser_id = $3)`;
+  // Renderable = fresh AND in stock. The `available` column is the soft-delete
+  // flag (present in the latest fetch); `availability` is the feed's own stock
+  // field, and advertising a sold-out product at a price is the same class of
+  // problem as advertising a stale one. Enforced here so no product_source
+  // branch can forget it.
+  const renderable = `
     exists (select 1 from feed f where f.id = product.feed_id
             and f.status = 'healthy'
-            and f.last_fetch_at > now() - (f.max_age_hours || ' hours')::interval)`;
+            and f.last_fetch_at > now() - (f.max_age_hours || ' hours')::interval)
+    and (product.availability is null
+         or lower(replace(product.availability, '_', ' '))
+            in ('in stock', 'instock', 'preorder', 'backorder', 'available for order'))`;
   const cols = `id, title, link, image_link, price_amount::text, price_currency,
                 sale_price_amount::text, sale_price_currency, brand, product_type,
                 custom_label_1, custom_label_2`;
 
   if (source.kind === 'explicit' && source.product_ids?.length) {
     return query<ProductRow>(
+      // Preserve the order the admin picked the products in.
       `select ${cols} from product
-       where id = any($1) and available and ${freshness}
+       where id = any($1) and available and ${ownedFeed} and ${renderable}
+       order by array_position($1::uuid[], id)
        limit $2`,
-      [source.product_ids, limit],
+      [source.product_ids, limit, advertiserId],
     );
   }
   if (source.kind === 'rule' && source.rule_id) {
-    const rules = await query<{ feed_id: string; conditions: RuleConditions }>(
-      'select feed_id, conditions from product_rule where id = $1',
+    const rules = await query<{ feed_id: string; conditions: RuleConditions; advertiser_id: string }>(
+      `select pr.feed_id, pr.conditions, f.advertiser_id
+       from product_rule pr join feed f on f.id = pr.feed_id
+       where pr.id = $1`,
       [source.rule_id],
     );
-    if (!rules[0]) return [];
-    const compiled = compileRule(rules[0].conditions, 2);
+    if (!rules[0] || rules[0].advertiser_id !== advertiserId) return [];
+    const compiled = compileRule(rules[0].conditions, 3);
     return query<ProductRow>(
       `select ${cols} from product
-       where feed_id = $1 and available and ${freshness} and (${compiled.where})
-       order by sale_price_amount nulls last, price_amount
+       where feed_id = $1 and available and ${ownedFeed} and ${renderable} and (${compiled.where})
+       order by ${RELEVANCE_ORDER}
        limit $2`,
-      [rules[0].feed_id, limit, ...compiled.params],
+      [rules[0].feed_id, limit, advertiserId, ...compiled.params],
     );
   }
   if (source.kind === 'full_feed') {
+    const target = source.feed_id ?? feedId;
+    if (!target) return [];
     return query<ProductRow>(
       `select ${cols} from product
-       where feed_id = $1 and available and ${freshness}
-       order by updated_at desc
+       where feed_id = $1 and available and ${ownedFeed} and ${renderable}
+       order by ${RELEVANCE_ORDER}, updated_at desc
        limit $2`,
-      [source.feed_id ?? feedId, limit],
+      [target, limit, advertiserId],
     );
   }
   return [];
@@ -158,7 +191,13 @@ function formatPrice(amount: string | null, currency: string | null): string | u
   return whole ? `${formatted}${suffix}` : `${formatted}${currency && currency !== 'DKK' ? ` ${currency}` : ' kr.'}`;
 }
 
-function toServeProduct(row: ProductRow, instanceId: string, placementId: string, origin: string): ServeProduct {
+function toServeProduct(
+  row: ProductRow,
+  instanceId: string,
+  placementId: string,
+  origin: string,
+  deviceClass: string,
+): ServeProduct {
   const sale = formatPrice(row.sale_price_amount, row.sale_price_currency);
   const price = formatPrice(row.price_amount, row.price_currency);
   let badge: string | undefined;
@@ -174,7 +213,7 @@ function toServeProduct(row: ProductRow, instanceId: string, placementId: string
   return {
     id: row.id,
     title: row.title,
-    clickUrl: `${origin}/c/${row.id}?i=${instanceId}&pl=${placementId}`,
+    clickUrl: `${origin}/c/${row.id}?i=${instanceId}&pl=${placementId}&d=${encodeURIComponent(deviceClass)}`,
     imageUrl: row.image_link ?? undefined,
     price,
     salePrice: sale,
@@ -217,7 +256,7 @@ export async function resolveServe(input: ResolveInput): Promise<ServeResponse> 
     id: string; name: string; status: string; site_id: string;
     layout_type: TemplateId; design_tokens: DesignTokens; slot_count: { default?: number };
     behaviours: Record<string, unknown>; token_overrides: DesignTokens;
-    fallback_config: { strategy: 'default_products' | 'hide'; product_source?: ProductSource };
+    fallback_config: { strategy: 'default_products' | 'hide'; product_source?: ProductSource; unmapped?: boolean };
     advertiser_id: string; advertiser_name: string; product_source: ProductSource; feed_id: string | null;
     meta_config: TemplateMeta | null;
   }>(
@@ -251,35 +290,56 @@ export async function resolveServe(input: ResolveInput): Promise<ServeResponse> 
 
   let rows: ProductRow[] = [];
   let matchedTerms: string[] = [];
+  let matchedMapping = false;
   for (const m of mappings) {
     const { hit, matchedTerms: terms } = await matchCondition(
       { key: m.page_key, operator: m.operator, value: m.page_value ?? undefined, dict_id: m.dict_id ?? undefined, segment: m.segment ?? undefined },
       kv,
     );
     if (!hit) continue;
-    rows = await resolveProducts(m.target, inst.feed_id ?? '', slots);
-    if (rows.length) {
-      matchedTerms = terms ?? [];
-      break;
+    // Strict priority: the FIRST matching mapping decides, exactly as the admin
+    // UI promises ("evalueres i prioritetsrækkefølge"). Falling through to a
+    // later segment when this one is out of stock would silently serve a
+    // different context than the operator configured.
+    matchedTerms = terms ?? [];
+    matchedMapping = true;
+    rows = await resolveProducts(m.target, inst.feed_id ?? '', slots, inst.advertiser_id);
+    break;
+  }
+  // Fallback chain (spec §5B): mapped match → explicit default set → nothing.
+  // An instance with NO mappings is only allowed to serve its own product
+  // source when that is a deliberate choice (fallback strategy
+  // 'default_products', or an explicit "unmapped": true), never implicitly —
+  // otherwise deleting the mappings, or flipping a half-configured instance
+  // live, quietly serves the whole catalogue on every matching page. That is
+  // the inversion of the locked decision "better nothing than a clashing wine".
+  if (!rows.length) {
+    if (inst.fallback_config?.strategy === 'default_products' && inst.fallback_config.product_source) {
+      rows = await resolveProducts(inst.fallback_config.product_source, inst.feed_id ?? '', slots, inst.advertiser_id);
+    } else if (!mappings.length && inst.fallback_config?.unmapped === true) {
+      rows = await resolveProducts(inst.product_source, inst.feed_id ?? '', slots, inst.advertiser_id);
     }
   }
   if (!rows.length) {
-    if (inst.fallback_config?.strategy === 'default_products' && inst.fallback_config.product_source) {
-      rows = await resolveProducts(inst.fallback_config.product_source, inst.feed_id ?? '', slots);
-    } else if (!mappings.length) {
-      // No mappings configured: the instance's own product source is the default set.
-      rows = await resolveProducts(inst.product_source, inst.feed_id ?? '', slots);
-    }
+    return { render: false, reason: mappings.length ? 'no_products' : 'no_mappings' };
   }
-  if (!rows.length) return { render: false, reason: 'no_products' };
 
-  const products = rows.map((r) => toServeProduct(r, inst.id, placement.id, origin));
+  const device = ['desktop', 'tablet', 'mobile'].includes(input.deviceClass ?? '')
+    ? (input.deviceClass as string)
+    : 'unknown';
+  const products = rows.map((r) => toServeProduct(r, inst.id, placement.id, origin, device));
   const metaConfig = (inst.meta_config ?? (inst.behaviours as { meta?: TemplateMeta })?.meta ?? {}) as Partial<TemplateMeta>;
   const meta: TemplateMeta = {
     advertiserName: inst.advertiser_name,
     ...metaConfig,
-    chips: matchedTerms.length ? matchedTerms.slice(0, 4) : metaConfig.chips,
+    chips: matchedTerms.length ? matchedTerms.slice(0, 4) : undefined,
   };
+  // Never assert a contextual match we did not make: the match line and chips
+  // are only shown when a mapping actually matched this page.
+  if (!matchedMapping) {
+    meta.matchLine = undefined;
+    meta.chips = undefined;
+  }
 
   const { customCss: _drop, ...overrides } = inst.token_overrides ?? {};
   delete (overrides as Record<string, unknown>)['__meta'];
@@ -302,10 +362,22 @@ export async function resolveServe(input: ResolveInput): Promise<ServeResponse> 
   };
 }
 
-/** Kept alongside resolveServe so click destinations resolve the same product rows. */
-export async function resolveClickDestination(productId: string): Promise<string | null> {
-  const rows = await query<{ link: string }>('select link from product where id = $1', [productId]);
-  return rows[0]?.link ?? null;
+/**
+ * Records the outcome of a serve so no-render decisions are visible. The widget
+ * fails silent by design, so without this a misspelled key-value looks exactly
+ * like "no traffic yet". Never throws: telemetry must not break a serve.
+ */
+export async function recordServeDecision(placementCode: string, reason: string): Promise<void> {
+  try {
+    await query(
+      `insert into serve_decision (hour, placement_id, reason, count)
+       select date_trunc('hour', now()), p.id, $2, 1 from placement p where p.code = $1
+       on conflict (hour, placement_id, reason) do update set count = serve_decision.count + 1`,
+      [placementCode, reason.slice(0, 40)],
+    );
+  } catch {
+    /* telemetry is best-effort */
+  }
 }
 
 export { sql };

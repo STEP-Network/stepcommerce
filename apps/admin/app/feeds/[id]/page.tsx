@@ -20,7 +20,7 @@ export default async function FeedDetail({
   async function fetchNow() {
     'use server';
     const rows = await query<FeedRow>(
-      'select id, source_url, type, field_mapping, last_fetch_hash, max_age_hours from feed where id = $1',
+      'select id, source_url, type, field_mapping, last_fetch_hash, max_age_hours, item_element from feed where id = $1',
       [id],
     );
     if (rows[0]) await fetchFeed(rows[0]);

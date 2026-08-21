@@ -16,6 +16,8 @@ export interface DesignTokens {
   colorAccentSecondary?: string;
   colorBadgeBg?: string;
   colorBadgeText?: string;
+  colorSplashBg?: string;
+  colorSplashText?: string;
   fontFamily?: string;
   headingFontFamily?: string;
   fontSizeBase?: string;

@@ -36,6 +36,8 @@ export interface FeedRow {
   field_mapping: Record<string, string> | null;
   last_fetch_hash: string | null;
   max_age_hours: number;
+  /** Non-Google XML feeds may wrap products in something other than <item>. */
+  item_element?: string | null;
 }
 
 const CANONICAL_FIELDS = [
@@ -45,14 +47,32 @@ const CANONICAL_FIELDS = [
   'custom_label_3', 'custom_label_4',
 ];
 
-function parsePrice(value?: string): { amount?: string; currency?: string } {
+/**
+ * Google Shopping mandates "89.95 DKK", but Danish exports routinely emit
+ * "1.289,00 DKK" (dot grouping, comma decimal) and "1.289 DKK". Getting this
+ * wrong is not cosmetic: "1.289 DKK" naively parsed becomes 1.29, i.e. a wrong
+ * price on a publisher page. The separator that appears LAST decides which role
+ * each character plays; a group separator is only accepted when exactly three
+ * digits follow it. Anything still unparseable yields no price rather than an
+ * invalid numeric that would abort the whole feed.
+ */
+export function parsePrice(value?: string): { amount?: string; currency?: string } {
   if (!value) return {};
-  const m = value.trim().match(/^([\d.,]+)\s*([A-Z]{3})?$/);
+  const m = value.trim().match(/^([\d.,\s]+?)\s*([A-Z]{3})?$/);
   if (!m) return {};
-  // Google Shopping uses "89.95 DKK"; tolerate "89,95" as decimal comma.
-  let amount = m[1];
-  if (amount.includes(',') && !amount.includes('.')) amount = amount.replace(',', '.');
-  else amount = amount.replace(/,(?=\d{3})/g, '');
+  const raw = m[1].replace(/\s/g, '');
+  const lastDot = raw.lastIndexOf('.');
+  const lastComma = raw.lastIndexOf(',');
+  const dec = Math.max(lastDot, lastComma);
+  let amount: string;
+  if (dec === -1) {
+    amount = raw;
+  } else if (raw.length - dec - 1 === 3 && (lastDot === -1 || lastComma === -1)) {
+    amount = raw.replace(/[.,]/g, ''); // grouping only: 1.289 / 1,289
+  } else {
+    amount = raw.slice(0, dec).replace(/[.,]/g, '') + '.' + raw.slice(dec + 1);
+  }
+  if (!/^\d+(\.\d+)?$/.test(amount)) return {};
   return { amount, currency: m[2] };
 }
 
@@ -99,29 +119,45 @@ export async function parseXmlFeed(
   body: ReadableStream<Uint8Array>,
   mapping: Record<string, string> | null,
   onProduct: (p: CanonicalProduct) => Promise<void>,
-): Promise<{ count: number; hash: string }> {
+  itemTags: string[] = ['item', 'entry'],
+): Promise<{ count: number; hash: string; complete: boolean }> {
   const parser = sax.parser(false, { lowercase: true, trim: false });
   const hash = createHash('sha256');
   let count = 0;
   let inItem = false;
+  let depth = 0;
   let fields: Record<string, string[]> = {};
   let currentTag: string | null = null;
   let text = '';
+  let sawRootClose = false;
   const pending: CanonicalProduct[] = [];
+  const isItem = (name: string): boolean => itemTags.includes(name);
 
   const normalizeTag = (tag: string): string => {
     const bare = tag.replace(/^g:/, '');
     return mapping?.[bare] ?? mapping?.[tag] ?? bare;
   };
 
+  // Depth tracking matters: Google Shopping items contain nested blocks such as
+  // <g:shipping><g:price>49.00</g:price></g:shipping>. Without it, the shipping
+  // price lands in the same `price` bucket as the product price and — depending
+  // on element order — becomes the rendered price.
   parser.onopentag = (node) => {
     const name = node.name;
-    if (name === 'item' || name === 'entry') {
+    if (isItem(name)) {
       inItem = true;
+      depth = 0;
       fields = {};
-    } else if (inItem) {
+      currentTag = null;
+      return;
+    }
+    if (!inItem) return;
+    depth++;
+    if (depth === 1) {
       currentTag = normalizeTag(name);
       text = '';
+    } else {
+      currentTag = null; // nested element: not a canonical field
     }
   };
   parser.ontext = (t) => {
@@ -131,17 +167,23 @@ export async function parseXmlFeed(
     if (currentTag) text += t;
   };
   parser.onclosetag = (name) => {
-    if (name === 'item' || name === 'entry') {
+    if (name === 'rss' || name === 'feed') sawRootClose = true;
+    if (isItem(name)) {
       inItem = false;
+      depth = 0;
       const p = toCanonical(fields);
       if (p) {
         count++;
         pending.push(p);
       }
-    } else if (inItem && currentTag) {
+      return;
+    }
+    if (!inItem) return;
+    if (depth === 1 && currentTag) {
       (fields[currentTag] ??= []).push(text);
       currentTag = null;
     }
+    depth--;
   };
 
   const decoder = new TextDecoder();
@@ -153,9 +195,10 @@ export async function parseXmlFeed(
     parser.write(decoder.decode(value, { stream: true }));
     while (pending.length) await onProduct(pending.shift()!);
   }
+  parser.write(decoder.decode()); // flush a trailing partial multi-byte sequence
   parser.close();
   while (pending.length) await onProduct(pending.shift()!);
-  return { count, hash: hash.digest('hex') };
+  return { count, hash: hash.digest('hex'), complete: sawRootClose };
 }
 
 /** Minimal CSV: first row = headers, comma-separated, double-quote escaping. */
@@ -186,9 +229,50 @@ export function parseCsv(textBody: string): Record<string, string[]>[] {
 }
 
 const BATCH_SIZE = 200;
+const FETCH_TIMEOUT_MS = 60_000;
 
-async function upsertBatch(feedId: string, batch: CanonicalProduct[]): Promise<void> {
-  if (!batch.length) return;
+/**
+ * Feed URLs are set by admins, but the fetcher runs with Vercel's egress, so
+ * restrict it to public http(s) endpoints: no other schemes, no loopback,
+ * link-local (cloud metadata) or private ranges.
+ */
+export function validateFeedUrl(raw: string): { ok: true } | { ok: false; reason: string } {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return { ok: false, reason: 'invalid_url' };
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    return { ok: false, reason: `blocked_scheme: ${url.protocol}` };
+  }
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  // Loopback is allowed outside production so the bundled demo feed can be
+  // fetched from a local dev server.
+  const loopback = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  if (loopback && process.env.NODE_ENV !== 'production') return { ok: true };
+  if (
+    host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.internal') ||
+    host === '::1' || host === '0.0.0.0' ||
+    /^127\./.test(host) || /^10\./.test(host) ||
+    /^192\.168\./.test(host) || /^169\.254\./.test(host) ||
+    /^172\.(1[6-9]|2[0-9]|3[01])\./.test(host) ||
+    /^(100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.)/.test(host) ||
+    /^f[cd][0-9a-f]{2}:/.test(host)
+  ) {
+    return { ok: false, reason: `blocked_host: ${host}` };
+  }
+  return { ok: true };
+}
+
+async function upsertBatch(feedId: string, rawBatch: CanonicalProduct[]): Promise<void> {
+  if (!rawBatch.length) return;
+  // ON CONFLICT DO UPDATE cannot touch the same row twice in one statement, so
+  // a feed that repeats a g:id inside one batch (common in variant exports)
+  // would abort the whole fetch and take the advertiser dark. Last one wins.
+  const deduped = new Map<string, CanonicalProduct>();
+  for (const p of rawBatch) deduped.set(p.external_id, p);
+  const batch = [...deduped.values()];
   const cols = [
     'external_id', 'title', 'description', 'link', 'image_link', 'additional_images',
     'price_amount', 'price_currency', 'sale_price_amount', 'sale_price_currency',
@@ -220,15 +304,21 @@ export interface FetchResult {
   count: number;
   dropped: number;
   error?: string;
+  contentChanged?: boolean;
 }
 
 /** Fetches one feed, upserts products, soft-deletes missing ones, updates health. */
 export async function fetchFeed(feed: FeedRow): Promise<FetchResult> {
-  const startedAt = new Date();
+  // The soft-delete watermark must come from the DATABASE clock, not the
+  // function's: last_seen_at is stamped with now() server-side, so comparing it
+  // against a Node timestamp that runs even slightly ahead soft-deletes rows
+  // this very run just wrote — silently emptying the catalogue while the feed
+  // still reports healthy.
+  const [{ started_at: startedAt }] = await query<{ started_at: string }>('select now() as started_at');
   const fail = async (error: string): Promise<FetchResult> => {
     await sql`
       update feed set status = 'failing',
-        error_log = (coalesce(error_log, '[]'::jsonb) || ${JSON.stringify([{ ts: startedAt.toISOString(), error }])}::jsonb),
+        error_log = (coalesce(error_log, '[]'::jsonb) || ${JSON.stringify([{ ts: new Date().toISOString(), error }])}::jsonb),
         updated_at = now()
       where id = ${feed.id}`;
     return { ok: false, status: 'failing', count: 0, dropped: 0, error };
@@ -240,9 +330,19 @@ export async function fetchFeed(feed: FeedRow): Promise<FetchResult> {
   );
   const previous = Number(prev_count);
 
+  const urlCheck = validateFeedUrl(feed.source_url);
+  if (!urlCheck.ok) return fail(urlCheck.reason);
+
   let res: Response;
   try {
-    res = await fetch(feed.source_url, { headers: { 'user-agent': 'STEPCommerce-FeedFetcher/1.0' } });
+    // Hard timeout: without it one slow advertiser origin can trickle bytes
+    // until the 300s function budget is gone, so the remaining feeds are never
+    // fetched, go stale, and stop rendering.
+    res = await fetch(feed.source_url, {
+      headers: { 'user-agent': 'STEPCommerce-FeedFetcher/1.0' },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      redirect: 'follow',
+    });
   } catch (e) {
     return fail(`unreachable: ${e instanceof Error ? e.message : String(e)}`);
   }
@@ -266,12 +366,22 @@ export async function fetchFeed(feed: FeedRow): Promise<FetchResult> {
       }
     } else {
       const mapping = feed.type === 'generic_xml' ? feed.field_mapping : null;
-      const result = await parseXmlFeed(res.body, mapping, async (p) => {
-        batch.push(p);
-        if (batch.length >= BATCH_SIZE) { await upsertBatch(feed.id, batch); batch = []; }
-      });
+      const itemTag = feed.item_element?.trim();
+      const result = await parseXmlFeed(
+        res.body,
+        mapping,
+        async (p) => {
+          batch.push(p);
+          if (batch.length >= BATCH_SIZE) { await upsertBatch(feed.id, batch); batch = []; }
+        },
+        itemTag ? [itemTag.toLowerCase()] : undefined,
+      );
       count = result.count;
       hash = result.hash;
+      // A truncated download is not a parse error in non-strict SAX mode: it
+      // just yields fewer products, which the drop check may wave through and
+      // the soft-delete then turns into a silently emptied catalogue.
+      if (!result.complete) return fail('truncated_feed: root close tag never seen');
     }
     await upsertBatch(feed.id, batch);
   } catch (e) {
@@ -279,7 +389,9 @@ export async function fetchFeed(feed: FeedRow): Promise<FetchResult> {
   }
 
   if (count === 0) return fail('zero_products');
-  const dropThreshold = 0.5;
+  // A price feed losing a tenth of its catalogue is already suspicious; 50% was
+  // far too permissive for the legal posture here.
+  const dropThreshold = 0.15;
   if (previous > 0 && count < previous * (1 - dropThreshold)) {
     return fail(`dropped_products: ${previous} -> ${count}`);
   }
@@ -287,23 +399,34 @@ export async function fetchFeed(feed: FeedRow): Promise<FetchResult> {
   // Soft-delete products missing from this fetch.
   const dropped = (await query(
     'update product set available = false, updated_at = now() where feed_id = $1 and available and last_seen_at < $2 returning id',
-    [feed.id, startedAt.toISOString()],
+    [feed.id, startedAt],
   )).length;
 
-  // Unchanged content since last fetch is fine — freshness is last_fetch_at,
-  // which we just proved; 'stale' is set by the health sweep when fetches stop.
+  // Content-hash comparison (spec §4.4). last_fetch_at only proves we
+  // downloaded something; it says nothing about whether the ADVERTISER updated
+  // it. A feed frozen behind a CDN keeps returning HTTP 200 forever, so without
+  // this we would happily render month-old prices with a green feed status.
+  // content_changed_at is what the staleness sweep actually judges.
+  const changed = hash !== feed.last_fetch_hash;
   await sql`
-    update feed set status = 'healthy', last_fetch_at = now(), last_fetch_hash = ${hash}, updated_at = now()
+    update feed set status = 'healthy', last_fetch_at = now(), last_fetch_hash = ${hash},
+      content_changed_at = case when ${changed} then now() else coalesce(content_changed_at, now()) end,
+      updated_at = now()
     where id = ${feed.id}`;
-  return { ok: true, status: 'healthy', count, dropped };
+  return { ok: true, status: 'healthy', count, dropped, contentChanged: changed };
 }
 
-/** Marks feeds whose last successful fetch is older than max_age_hours as stale. */
+/**
+ * Marks a feed stale when either its last successful fetch OR its last actual
+ * content change is older than max_age_hours.
+ */
 export async function sweepStaleFeeds(): Promise<number> {
   const rows = await query(
     `update feed set status = 'stale', updated_at = now()
      where status = 'healthy'
-       and (last_fetch_at is null or last_fetch_at < now() - (max_age_hours || ' hours')::interval)
+       and (last_fetch_at is null
+            or last_fetch_at < now() - (max_age_hours || ' hours')::interval
+            or coalesce(content_changed_at, last_fetch_at) < now() - (max_age_hours || ' hours')::interval)
      returning id`,
   );
   return rows.length;

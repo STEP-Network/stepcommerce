@@ -6,18 +6,25 @@ import { recipeCss, renderRecipe } from './templates/recipe';
 import { cardsCss, renderCards } from './templates/cards';
 import { resolveTokens, tokenCss } from './tokens';
 import { Tracker } from './track';
-import { h } from './dom';
+import { h, safeUrl } from './dom';
 import type { ServeResponse } from './types';
 
+/** Returns false when nothing was rendered, so the caller can drop the container. */
 export function mount(
   container: HTMLElement,
   serve: ServeResponse,
   kv: Record<string, string>,
   device: string,
   clickMacro?: string,
-): void {
-  if (!serve.render || !serve.template || !serve.tracking || !serve.products?.length || !serve.meta) {
-    return; // fallback chain ended in "render nothing" — collapse gracefully
+): boolean {
+  // Validate the whole payload BEFORE attaching a shadow root: a half-valid
+  // payload used to throw after attachShadow, leaving an empty shadow-attached
+  // div on the publisher's page forever.
+  if (
+    !serve.render || !serve.template || !serve.products?.length ||
+    !serve.meta?.advertiserName || !serve.tracking?.endpoint
+  ) {
+    return false;
   }
   const tokens = resolveTokens(serve.tokens);
   const shadow = container.attachShadow({ mode: 'closed' });
@@ -26,11 +33,15 @@ export function mount(
   style.textContent = tokenCss(tokens) + forumCss + recipeCss + cardsCss;
   shadow.append(style);
 
-  const root = h('div', { class: 'sc-root' });
+  // Marks the ad boundary for assistive tech so it can be skipped as a unit.
+  const root = h('div', { class: 'sc-root', role: 'complementary', 'aria-label': 'Annonce' });
   shadow.append(root);
 
   const tracker = new Tracker(serve.tracking, kv, device);
-  const wrapClick = (url: string): string => (clickMacro ? clickMacro + url : url);
+  // An unexpanded %%CLICK_URL_UNESC%% would turn every href into a relative URL
+  // and 404 on the publisher's own domain, so only a real absolute prefix is used.
+  const prefix = safeUrl(clickMacro) ? clickMacro : undefined;
+  const wrapClick = (url: string): string => (prefix ? prefix + url : url);
 
   switch (serve.template) {
     case 'forum_post':
@@ -48,4 +59,5 @@ export function mount(
 
   tracker.send('load');
   tracker.observeViewable(root);
+  return true;
 }

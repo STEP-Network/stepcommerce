@@ -16,6 +16,11 @@ const DEFAULTS: Required<Omit<DesignTokens, 'customCss' | 'ctaPulse'>> & { ctaPu
   colorAccentSecondary: '#8b78e0',
   colorBadgeBg: '#5F46D2',
   colorBadgeText: '#ffffff',
+  // Catalogue price splash: its own pair so the default palette cannot end up
+  // painting text on same-coloured background (the CTA/price tokens are both
+  // near-black by default).
+  colorSplashBg: '#5F46D2',
+  colorSplashText: '#ffffff',
   fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
   headingFontFamily: 'inherit',
   fontSizeBase: '15px',
@@ -32,13 +37,40 @@ export function resolveTokens(tokens?: DesignTokens): DesignTokens {
   return { ...DEFAULTS, ...(tokens ?? {}) };
 }
 
-export function tokenCss(t: DesignTokens): string {
+/**
+ * Token values are interpolated into the shadow root's stylesheet, and a
+ * stylesheet inside a shadow root can still style :host — which lives in the
+ * publisher's DOM. So a value containing `}` could close our rule and inject
+ * arbitrary CSS onto their page (e.g. a full-viewport fixed overlay).
+ * Anything with CSS control characters, comments or url() falls back to the
+ * default. `customCss` remains the single deliberate escape hatch.
+ */
+function safeToken(value: unknown, fallback: string): string {
+  const s = String(value ?? '');
+  if (!s) return fallback;
+  return /[{}<>;@\\]|\/\*|\*\/|url\s*\(|expression\s*\(/i.test(s) ? fallback : s;
+}
+
+function clampInt(value: unknown, min: number, max: number, fallback: number): number {
+  const n = Math.round(Number(value));
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+}
+
+export function tokenCss(raw: DesignTokens): string {
+  // Sanitize every interpolated value against the defaults.
+  const t: DesignTokens = { ...raw };
+  for (const key of Object.keys(DEFAULTS) as (keyof typeof DEFAULTS)[]) {
+    if (key === 'ctaPulse' || key === 'titleLineClamp' || key === 'ctaStyle') continue;
+    (t as Record<string, unknown>)[key] = safeToken(raw[key], String(DEFAULTS[key]));
+  }
+  const lineClamp = clampInt(raw.titleLineClamp, 1, 10, 2);
   return `:host{all:initial;display:block;contain:content}
 .sc-root{
   --sc-bg:${t.colorBackground};--sc-surface:${t.colorSurface};--sc-text:${t.colorText};
   --sc-text2:${t.colorTextSecondary};--sc-price:${t.colorPrice};--sc-cta-bg:${t.colorCtaBg};
   --sc-cta-text:${t.colorCtaText};--sc-border:${t.colorBorder};--sc-accent:${t.colorAccent};
   --sc-badge-bg:${t.colorBadgeBg};--sc-badge-text:${t.colorBadgeText};--sc-accent2:${t.colorAccentSecondary};
+  --sc-splash-bg:${t.colorSplashBg};--sc-splash-text:${t.colorSplashText};
   --sc-radius:${t.radius};--sc-shadow:${t.shadow};--sc-img-ratio:${t.imageRatio};
   --sc-img-fit:${t.imageFit};
   font-family:${t.fontFamily};font-size:${t.fontSizeBase};color:var(--sc-text);
@@ -48,7 +80,7 @@ export function tokenCss(t: DesignTokens): string {
 .sc-root img{max-width:100%;display:block}
 .sc-root a{color:inherit;text-decoration:none}
 .sc-heading{font-family:${t.headingFontFamily}}
-.sc-title{display:-webkit-box;-webkit-line-clamp:${t.titleLineClamp};-webkit-box-orient:vertical;overflow:hidden}
+.sc-title{display:-webkit-box;-webkit-line-clamp:${lineClamp};-webkit-box-orient:vertical;overflow:hidden}
 .sc-cta{display:inline-flex;align-items:center;gap:.4em;background:var(--sc-cta-bg);color:var(--sc-cta-text);
   border-radius:var(--sc-radius);padding:.55em 1.1em;font-weight:600;cursor:pointer;border:0;font-size:.95em}
 .sc-cta--link{background:none;color:var(--sc-accent);padding:0;border-radius:0;text-decoration:underline}
@@ -56,9 +88,18 @@ export function tokenCss(t: DesignTokens): string {
 @keyframes sc-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
 .sc-badge{display:inline-block;background:var(--sc-badge-bg);color:var(--sc-badge-text);
   border-radius:999px;padding:.15em .7em;font-size:.72em;font-weight:700}
-.sc-annonce{font-size:.62em;letter-spacing:.14em;text-transform:uppercase;color:var(--sc-text2);opacity:.75}
+/* Markedsføringsloven: the ad marking must be clearly recognisable, so its
+   size, weight and opacity are hard-coded and deliberately NOT token-driven —
+   an advertiser palette must not be able to shrink or erase it. Only the
+   colour adapts, and it is derived from the body text colour (never from the
+   secondary/muted token, which an advertiser could set to the surface colour). */
+.sc-annonce{font-size:12px!important;line-height:1.4;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--sc-text)!important;opacity:.72!important;font-weight:600}
+.sc-root{overflow-wrap:anywhere}
+:host([hidden]){display:none}
+${raw.customCss ?? ''}
+/* Accessibility overrides come last so customCss cannot re-enable motion. */
 @media (prefers-reduced-motion:reduce){
   .sc-root *,.sc-root *::before,.sc-root *::after{animation:none!important;transition:none!important}
-}
-${t.customCss ?? ''}`;
+}`;
 }

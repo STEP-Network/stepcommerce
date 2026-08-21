@@ -1,6 +1,7 @@
 // Key-value acquisition for the direct embed (spec §5): googletag page-level
 // targeting → dataLayer → data-kv attribute. GAM-served creatives never reach
-// this path — their KVs arrive pre-injected via %%PATTERN%% macros in config.kv.
+// this path — their KVs arrive pre-injected via %%PATTERN%% macros in config.kv,
+// and probing googletag from inside a SafeFrame is explicitly forbidden.
 
 type Googletag = {
   apiReady?: boolean;
@@ -9,6 +10,11 @@ type Googletag = {
     getTargeting?: (key: string) => string[];
   };
 };
+
+/** Drops empty values and unexpanded GAM macros so the server sees an absent key. */
+function usable(value: string | undefined): boolean {
+  return !!value && !/^%%.*%%$/.test(value);
+}
 
 function fromGoogletag(): Record<string, string> {
   const out: Record<string, string> = {};
@@ -63,19 +69,43 @@ function fromScriptAttr(script: HTMLElement | null): Record<string, string> {
   return out;
 }
 
-/** Later sources win: googletag < dataLayer < data-kv < explicit config KVs. */
+/**
+ * Later sources win: googletag < dataLayer < data-kv < explicit config KVs.
+ *
+ * When explicit KVs are supplied (the GAM path) the page is NOT probed at all:
+ * inside a SafeFrame `window.googletag` is the iframe's own window, and reading
+ * publisher targeting from there is exactly what CLAUDE.md rule 3 forbids.
+ */
 export function collectKv(
   script: HTMLElement | null,
   explicit?: Record<string, string>,
 ): Record<string, string> {
-  return { ...fromGoogletag(), ...fromDataLayer(), ...fromScriptAttr(script), ...(explicit ?? {}) };
+  const merged = explicit
+    ? { ...fromScriptAttr(script), ...explicit }
+    : { ...fromGoogletag(), ...fromDataLayer(), ...fromScriptAttr(script) };
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(merged)) if (usable(v)) out[k] = v;
+  return out;
 }
 
+/**
+ * Device class. Inside a GAM SafeFrame `innerWidth` is the CREATIVE's width, so
+ * a 300x250 slot on a desktop would report "mobile" and misattribute essentially
+ * all network traffic. Use the screen width whenever we are framed.
+ */
 export function deviceClass(): string {
   try {
-    const w = window.innerWidth || 0;
+    const framed = window !== window.top;
+    const w = (framed ? window.screen?.width : window.innerWidth) || window.innerWidth || 0;
     return w >= 1024 ? 'desktop' : w >= 600 ? 'tablet' : 'mobile';
   } catch {
-    return 'unknown';
+    // Cross-origin access to window.top throws in some browsers — that itself
+    // means we are framed, so fall back to the screen width.
+    try {
+      const w = window.screen?.width || 0;
+      return w >= 1024 ? 'desktop' : w >= 600 ? 'tablet' : 'mobile';
+    } catch {
+      return 'unknown';
+    }
   }
 }
